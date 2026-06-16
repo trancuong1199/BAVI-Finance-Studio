@@ -10,8 +10,9 @@ import { Payments } from './components/Payments';
 import { FeaturesDoc } from './components/FeaturesDoc';
 import { BackgroundAnimation } from './components/BackgroundAnimation';
 import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu } from 'lucide-react';
+import { UniswapPortal } from './components/UniswapPortal';
 
-type ViewState = 'swap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc';
+type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -27,7 +28,7 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc'];
+  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
@@ -218,6 +219,13 @@ function App() {
             Swap
           </a>
           <a
+            className={`nav-link ${currentView === 'uniswap' ? 'active' : ''}`}
+            onClick={() => navigateTo('uniswap')}
+            style={currentView === 'uniswap' ? { boxShadow: 'inset 4px 0 0 #ff007a', background: 'rgba(255, 0, 122, 0.15)', color: 'var(--text-primary)' } : {}}
+          >
+            Uniswap 🦄
+          </a>
+          <a
             className={`nav-link ${currentView === 'payments' ? 'active' : ''}`}
             onClick={() => navigateTo('payments')}
           >
@@ -308,6 +316,12 @@ function App() {
                 : <SwapWidget />}
             </div>
           </div>
+        </main>
+      )}
+
+      {currentView === 'uniswap' && (
+        <main className="page-view" style={{ marginTop: '0' }}>
+          <UniswapPortal connectedAccount={address} getProvider={getProvider} />
         </main>
       )}
 

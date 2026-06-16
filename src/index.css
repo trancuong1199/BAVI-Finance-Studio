@@ -1637,3 +1637,32 @@ input[type="number"]:hover::-webkit-outer-spin-button {
 .btn-new-payment:hover {
   color: #93c5fd;
 }
+
+/* Uniswap Portal Integration Styles */
+@keyframes spin-rotation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-rotation {
+  animation: spin-rotation 2s linear infinite;
+}
+
+/* Custom styles for Uniswap table and badges */
+.data-table th {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.data-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.uniswap-gradient-text {
+  background: linear-gradient(135deg, #ff007a 0%, #fc00d6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
