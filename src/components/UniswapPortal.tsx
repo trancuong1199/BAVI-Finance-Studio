@@ -76,7 +76,7 @@ const TOKENS: { [symbol: string]: Token } = {
     symbol: 'wGOLD',
     name: 'Wrapped PAX Gold (RWA)',
     decimals: 18,
-    address: '0xeC72535F30A3BE2F677cD6303Cec089B5F319D72A',
+    address: '0xeC72535F30A3BE2F677cD6303Cec089B5F319D72',
     icon: '👑',
   },
   UNI: {
@@ -434,7 +434,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
 
           txParams = {
             from: connectedAccount,
-            to: tokenIn.address,
+            to: tokenIn.address.toLowerCase(),
             value: '0x0',
             data: data,
           };
