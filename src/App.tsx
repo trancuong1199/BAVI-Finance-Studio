@@ -9,10 +9,11 @@ import { CircleSmartContracts } from './components/CircleSmartContracts';
 import { Payments } from './components/Payments';
 import { FeaturesDoc } from './components/FeaturesDoc';
 import { BackgroundAnimation } from './components/BackgroundAnimation';
+import { TransactionMemos } from './components/TransactionMemos';
 import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu } from 'lucide-react';
 import { UniswapPortal } from './components/UniswapPortal';
 
-type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc';
+type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -28,7 +29,7 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc'];
+  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
@@ -256,6 +257,13 @@ function App() {
             Contracts
           </a>
           <a
+            className={`nav-link ${currentView === 'memos' ? 'active' : ''}`}
+            onClick={() => navigateTo('memos')}
+            style={currentView === 'memos' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
+          >
+            📋 Tx Memos
+          </a>
+          <a
             className={`nav-link ${currentView === 'doc' ? 'active' : ''}`}
             onClick={() => navigateTo('doc')}
           >
@@ -352,6 +360,12 @@ function App() {
       {currentView === 'contracts' && (
         <main className="page-view">
           <CircleSmartContracts />
+        </main>
+      )}
+
+      {currentView === 'memos' && (
+        <main className="page-view">
+          <TransactionMemos walletProvider={walletProvider} address={address || ''} />
         </main>
       )}
 
