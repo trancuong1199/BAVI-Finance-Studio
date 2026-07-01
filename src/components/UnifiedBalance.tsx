@@ -82,13 +82,13 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
   const [activeTab, setActiveTab] = useState<"deposit" | "spend" | "safeguards">("deposit");
   const [depChain, setDepChain] = useState("Base_Sepolia");
   const [depAmount, setDepAmount] = useState("");
-  
+
   const [spendChain, setSpendChain] = useState("Arc_Testnet");
   const [spendAmount, setSpendAmount] = useState("");
   const [spendRecipient, setSpendRecipient] = useState(userAddress);
   const [routingMode, setRoutingMode] = useState<'auto' | 'explicit'>('auto');
   const [enableFallback, setEnableFallback] = useState(true);
-  
+
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error" | "info"; msg: string; txHash?: string } | null>(null);
 
@@ -99,6 +99,85 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
   // New: balance state classification
   const [balanceStates, setBalanceStates] = useState<Record<string, BalanceState>>({});
 
+  // Map Blockchain names returned by SDK to local UI chain IDs
+  const mapSdkChainToLocalId = (blockchain: string): string | null => {
+    switch (blockchain) {
+      case 'Arc': return 'Arc_Testnet';
+      case 'Base': return 'Base_Sepolia';
+      case 'Arbitrum': return 'Arbitrum_Sepolia';
+      case 'Avalanche': return 'Avalanche_Fuji';
+      case 'Ethereum': return 'Ethereum_Sepolia';
+      default:
+        const lower = blockchain.toLowerCase();
+        if (lower.includes('arc')) return 'Arc_Testnet';
+        if (lower.includes('base')) return 'Base_Sepolia';
+        if (lower.includes('arbitrum')) return 'Arbitrum_Sepolia';
+        if (lower.includes('avax') || lower.includes('avalanche')) return 'Avalanche_Fuji';
+        if (lower.includes('ethereum')) return 'Ethereum_Sepolia';
+        return null;
+    }
+  };
+
+  const loadRealBalances = async () => {
+    if (!adapter || !userAddress) return;
+    setLoading(true);
+    try {
+      const { createViemAdapterFromProvider } = await import('@circle-fin/adapter-viem-v2');
+      const viemAdapter = await createViemAdapterFromProvider({ provider: adapter });
+      const kit = new AppKit();
+
+      console.log("Fetching live unified balances for", userAddress);
+      const res = await kit.unifiedBalance.getBalances({
+        token: 'USDC',
+        sources: { adapter: viemAdapter },
+        includePending: true,
+      });
+
+      console.log("getBalances result:", JSON.stringify(res, null, 2));
+
+      const newStates: Record<string, BalanceState> = {};
+      const newBalances: Record<string, string> = {};
+
+      // Initialize all supported chains to zero first
+      SUPPORTED_CHAINS.forEach(c => {
+        newStates[c.id] = { confirmed: 0, pending: 0, inMotion: 0 };
+        newBalances[c.id] = '0.00';
+      });
+
+      if (res.breakdown && res.breakdown.length > 0) {
+        const userBreakdown = res.breakdown[0];
+        userBreakdown.breakdown.forEach((chainBal: any) => {
+          const chainId = mapSdkChainToLocalId(chainBal.chain);
+          if (chainId) {
+            const confirmedVal = parseFloat(chainBal.confirmedBalance || '0');
+            const pendingVal = parseFloat(chainBal.pendingBalance || '0');
+            newStates[chainId] = {
+              confirmed: confirmedVal,
+              pending: pendingVal,
+              inMotion: 0,
+            };
+            newBalances[chainId] = (confirmedVal + pendingVal).toFixed(2);
+          }
+        });
+      }
+
+      setBalanceStates(newStates);
+      setBalancesState(newBalances);
+    } catch (e: any) {
+      console.warn("Failed to load real unified balances:", e?.message || e);
+      // On error: do NOT overwrite existing balancesState — preserve any optimistic updates
+      // Only reset the breakdown states, not the string balance map
+      const newStates: Record<string, BalanceState> = {};
+      SUPPORTED_CHAINS.forEach(c => {
+        const existing = parseFloat(balancesState[c.id] || '0');
+        newStates[c.id] = { confirmed: existing, pending: 0, inMotion: 0 };
+      });
+      setBalanceStates(newStates);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Auto-fill recipient when userAddress changes
   useEffect(() => {
     if (userAddress && !spendRecipient) {
@@ -106,19 +185,24 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
     }
   }, [userAddress]);
 
-  // Initialize balance states on mount / balance change
+  // Load balances when adapter or userAddress changes
   useEffect(() => {
-    const newStates: Record<string, BalanceState> = {};
-    SUPPORTED_CHAINS.forEach(c => {
-      const total = parseFloat(balancesState[c.id] || '0');
-      newStates[c.id] = {
-        confirmed: total * 0.9,
-        pending: total * 0.08,
-        inMotion: total * 0.02,
-      };
-    });
-    setBalanceStates(newStates);
-  }, [balancesState]);
+    if (adapter && userAddress) {
+      loadRealBalances();
+    } else {
+      // Initialize balance states if not connected
+      const newStates: Record<string, BalanceState> = {};
+      SUPPORTED_CHAINS.forEach(c => {
+        const total = parseFloat(balancesState[c.id] || '0') || (c.isArc ? 100.00 : 50.00);
+        newStates[c.id] = {
+          confirmed: total * 0.9,
+          pending: total * 0.08,
+          inMotion: total * 0.02,
+        };
+      });
+      setBalanceStates(newStates);
+    }
+  }, [adapter, userAddress]);
 
   // Aggregated USDC Balance
   const totalUnifiedUSDC = Object.values(balancesState).reduce((acc, val) => acc + parseFloat(val || "0"), 0);
@@ -135,18 +219,21 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
     setEstimating(true);
     setSpendEstimate(null);
     try {
+      const { createViemAdapterFromProvider } = await import('@circle-fin/adapter-viem-v2');
+      const viemAdapter = await createViemAdapterFromProvider({ provider: adapter });
+
       const kit = new AppKit();
       // Preflight call — same params as the real spend()
-      const estimate = await (kit.unifiedBalance as any).estimateSpend({
+      const estimate = await kit.unifiedBalance.estimateSpend({
         amount: spendAmount,
-        from: { adapter },
-        to: { adapter, chain: spendChain as any, recipientAddress: spendRecipient },
+        from: { adapter: viemAdapter },
+        to: { adapter: viemAdapter, chain: spendChain as any, recipientAddress: spendRecipient },
       });
       setSpendEstimate({
-        fee: estimate?.fee || '~0.0001',
-        route: estimate?.route || (routingMode === 'auto' ? 'Auto-allocated (recommended)' : `Explicit: ${spendChain}`),
-        delegateReady: estimate?.delegateReady ?? true,
-        expirationBlock: estimate?.expirationBlock || 0,
+        fee: estimate?.fees?.[0]?.amount || '~0.0001',
+        route: (estimate as any)?.route || (routingMode === 'auto' ? 'Auto-allocated (recommended)' : `Explicit: ${spendChain}`),
+        delegateReady: (estimate as any)?.delegateReady ?? true,
+        expirationBlock: (estimate as any)?.expirationBlock || 0,
         viable: true,
       });
     } catch (err: any) {
@@ -180,12 +267,16 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
     setStatus({ type: "info", msg: "Preparing deposit process..." });
 
     try {
+      const { createViemAdapterFromProvider } = await import('@circle-fin/adapter-viem-v2');
+      const viemAdapter = await createViemAdapterFromProvider({ provider: adapter });
+
       // If MetaMask is used, switch to the selected Deposit Chain
       if (isMetaMask) {
         setStatus({ type: "info", msg: `Switching network to ${depChain.replace("_", " ")} in MetaMask...` });
         const netInfo = CHAIN_NETWORK_DETAILS[depChain];
         if (netInfo) {
           const switched = await switchOrAddNetwork(
+            adapter,
             netInfo.chainIdHex,
             netInfo.chainName,
             netInfo.rpcUrl,
@@ -202,10 +293,10 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
       setStatus({ type: "info", msg: `Depositing ${depAmount} USDC from ${depChain.replace("_", " ")} to Unified Balance...` });
 
       const kit = new AppKit();
-      
+
       const result = await kit.unifiedBalance.deposit({
         from: {
-          adapter,
+          adapter: viemAdapter,
           chain: depChain as any,
         },
         amount: depAmount,
@@ -220,11 +311,21 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
         txHash: (result as any).txHash || (result as any).transactionHash || (result as any).id || (typeof result === "string" ? result : undefined),
       });
 
-      // Update state
+      const depositedAmt = parseFloat(depAmount);
+
+      // Optimistic update: reflect new balance immediately in BOTH state maps
       setBalancesState((prev) => ({
         ...prev,
-        [depChain]: (parseFloat(prev[depChain] || "0") - parseFloat(depAmount)).toFixed(2),
-        Arc_Testnet: (parseFloat(prev.Arc_Testnet || "0") + parseFloat(depAmount)).toFixed(2), // Add to virtual
+        [depChain]: (parseFloat(prev[depChain] || "0") - depositedAmt).toFixed(2),
+        Arc_Testnet: (parseFloat(prev.Arc_Testnet || "0") + depositedAmt).toFixed(2),
+      }));
+      setBalanceStates((prev) => ({
+        ...prev,
+        Arc_Testnet: {
+          confirmed: (prev.Arc_Testnet?.confirmed || 0) + depositedAmt,
+          pending: prev.Arc_Testnet?.pending || 0,
+          inMotion: prev.Arc_Testnet?.inMotion || 0,
+        },
       }));
 
       setDepAmount("");
@@ -254,25 +355,27 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
       setStatus({ type: "error", msg: "Insufficient Unified Balance." });
       return;
     }
-    // Production safeguard: check confirmed (not pending) balance
-    if (parseFloat(spendAmount) > totalConfirmed) {
-      setStatus({ type: "error", msg: `Spend exceeds confirmed balance (${totalConfirmed.toFixed(2)} USDC confirmed, ${totalPending.toFixed(2)} pending). Wait for finalization or reduce amount.` });
-      return;
+    // Warn if spending more than confirmed (may be pending), but don't block
+    if (totalConfirmed > 0 && parseFloat(spendAmount) > totalConfirmed) {
+      console.warn(`Spending ${spendAmount} USDC but only ${totalConfirmed.toFixed(2)} confirmed (${totalPending.toFixed(2)} pending). Attempting anyway.`);
     }
 
     setLoading(true);
     setStatus({ type: "info", msg: "[Preflight] Validating route and delegate readiness..." });
 
     try {
+      const { createViemAdapterFromProvider } = await import('@circle-fin/adapter-viem-v2');
+      const viemAdapter = await createViemAdapterFromProvider({ provider: adapter });
+
       // Production pattern: run estimateSpend() with same params before spend()
       setStatus({ type: "info", msg: `[Preflight] Running estimateSpend() for ${spendAmount} USDC → ${spendChain.replace('_', ' ')}...` });
       const kit = new AppKit();
 
       try {
-        await (kit.unifiedBalance as any).estimateSpend({
+        await kit.unifiedBalance.estimateSpend({
           amount: spendAmount,
-          from: { adapter },
-          to: { adapter, chain: spendChain as any, recipientAddress: spendRecipient },
+          from: { adapter: viemAdapter },
+          to: { adapter: viemAdapter, chain: spendChain as any, recipientAddress: spendRecipient },
         });
         setStatus({ type: "info", msg: `[Preflight OK] Route viable. Executing spend...` });
       } catch (preflightErr: any) {
@@ -285,12 +388,12 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
       }
 
       setStatus({ type: "info", msg: `Spending ${spendAmount} USDC from Unified Balance to ${spendChain.replace("_", " ")}...` });
-      
+
       const result = await kit.unifiedBalance.spend({
         amount: spendAmount,
-        from: { adapter },
+        from: { adapter: viemAdapter },
         to: {
-          adapter,
+          adapter: viemAdapter,
           chain: spendChain as any,
           recipientAddress: spendRecipient,
         },
@@ -331,7 +434,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
   const handleSimulateDeposit = () => {
     setLoading(true);
     setStatus({ type: "info", msg: "[SIMULATION] Routing funds to Circle Gateway. Estimating gas..." });
-    
+
     setTimeout(() => {
       setLoading(false);
       const mockTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
@@ -357,7 +460,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
   const handleSimulateSpend = () => {
     setLoading(true);
     setStatus({ type: "info", msg: "[SIMULATION] Initiating smart contract execution for multi-source spend..." });
-    
+
     setTimeout(() => {
       setLoading(false);
       const mockTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
@@ -381,7 +484,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "2rem", padding: '0 0.25rem' }}>
       {/* 1. Aggregated Balances Header — with state classification */}
       <div className="balance-grid">
         <div className="balance-card-summary total">
@@ -416,17 +519,38 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
       </div>
 
       {/* 2. Individual Chain Breakdowns */}
-      <div className="glass-panel">
-        <div className="panel-header">
-          <h2>
-            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-primary)" }}>
-              <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-              <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
-            </svg>
-            Multichain Asset Allocations
-          </h2>
-          <p>This aggregates USDC across multiple testnets into a single spending dashboard.</p>
+      <div className="glass-panel" style={{ padding: '1.75rem' }}>
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginBottom: "1rem", paddingRight: "10px" }}>
+            <h2>
+              <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-primary)" }}>
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+              </svg>
+              Multichain Asset Allocations
+            </h2>
+            <p>This aggregates USDC across multiple testnets into a single spending dashboard.</p>
+          </div>
+          <button
+            type="button"
+            onClick={loadRealBalances}
+            style={{
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              padding: '6px 12px',
+              borderRadius: '8px',
+              color: '#fff',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.85rem'
+            }}
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
 
         {SUPPORTED_CHAINS.map((c) => (
@@ -448,7 +572,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
       </div>
 
       {/* 3. Deposit & Spend Tabs */}
-      <div className="glass-panel">
+      <div className="glass-panel" style={{ padding: '1.75rem' }}>
         <div className="tabs-container">
           <button
             type="button"
@@ -493,7 +617,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
                 onChange={(e) => setDepChain(e.target.value)}
                 disabled={loading}
               >
-                {SUPPORTED_CHAINS.filter(c => !c.isArc).map((c) => (
+                {SUPPORTED_CHAINS.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -528,7 +652,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
               <button
                 type="button"
                 className="submit-btn"
-                style={{ background: "linear-gradient(135deg, var(--color-primary), var(--color-accent))", marginTop: "1rem" }}
+                style={{ background: "var(--accent-gradient)", marginTop: "1rem" }}
                 onClick={handleSimulateDeposit}
                 disabled={loading}
               >
@@ -685,7 +809,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
               <button
                 type="button"
                 className="submit-btn"
-                style={{ background: "linear-gradient(135deg, var(--color-secondary), var(--color-accent))", marginTop: "1rem" }}
+                style={{ background: "var(--accent-gradient)", marginTop: "1rem" }}
                 onClick={handleSimulateSpend}
                 disabled={loading}
               >
@@ -696,7 +820,7 @@ export const UnifiedBalance: React.FC<UnifiedBalanceProps> = ({
         )}
 
         {status && (
-          <div className={`status-box ${status.type}`}>
+          <div className={`status-box ${status.type}`} style={{ marginTop: '1rem' }}>
             <div style={{ fontWeight: 600 }}>
               {status.type === "success" && "✓ Success"}
               {status.type === "error" && "⚠ Error"}

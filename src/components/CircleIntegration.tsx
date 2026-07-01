@@ -56,7 +56,7 @@ export const CircleIntegration: React.FC<CircleIntegrationProps> = ({ connectedA
             kitKey: kitKey,
           },
         });
-        appendLog(`🎉 Circle Swap Response: ${JSON.stringify(result, null, 2)}`);
+        appendLog(`🎉 Circle Swap Response: ${JSON.stringify(result, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2)}`);
       } catch (err: any) {
         // Circle's AppKit often throws CORS or 401 locally depending on domain restrictions
         if (err.message && err.message.includes('fetch')) {

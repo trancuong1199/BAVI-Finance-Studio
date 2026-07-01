@@ -16,12 +16,7 @@ export const CircleSmartContracts: React.FC = () => {
   const [entitySecret, setEntitySecret] = useState(import.meta.env.VITE_CIRCLE_ENTITY_SECRET || '');
   const [templateId, setTemplateId] = useState(import.meta.env.VITE_CIRCLE_TEMPLATE_ID || ''); // User provides the Circle Template UUID
 
-  const handleDeploy = async () => {
-    if (!contractName || !contractSymbol) return;
-    
-    setLoading(true);
-    
-    // Simulate Circle SCP deployment API call
+  const runSimulation = () => {
     setTimeout(() => {
       setDeployedContract('0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join(''));
       setLoading(false);
@@ -29,9 +24,90 @@ export const CircleSmartContracts: React.FC = () => {
     }, 2500);
   };
 
+  const handleDeploy = async () => {
+    if (!contractName || !contractSymbol) return;
+    
+    setLoading(true);
+    
+    // Check if we have credentials for a real deployment
+    if (apiKey && walletId && entitySecret && templateId) {
+      try {
+        const uuid = Array.from({length:36}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        const response = await fetch('https://api-sandbox.circle.com/v1/w3s/smart-contracts/templates/deploy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'X-Request-Id': uuid
+          },
+          body: JSON.stringify({
+            templateId: templateId,
+            walletId: walletId,
+            blockchain: 'ETH-SEPOLIA',
+            feeLevel: 'MEDIUM',
+            entitySecretCiphertext: entitySecret,
+            templateParameters: {
+              name: contractName,
+              symbol: contractSymbol,
+              defaultAdmin: '0xb59b2C4efDAe4a9d9eb497E435cF25b65001D224', // Default to user address
+              primarySaleRecipient: '0xb59b2C4efDAe4a9d9eb497E435cF25b65001D224'
+            }
+          })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.data && data.data.id) {
+          // Success: Store the deployment ID in state
+          setDeployedContract(data.data.id);
+          setLoading(false);
+          setActiveTab('manage');
+          alert(`Smart Contract deployment initiated!\nDeployment ID: ${data.data.id}\n\nPlease click "Check API Status" in the next tab to monitor deployment progress.`);
+        } else {
+          const errMsg = data.message || JSON.stringify(data);
+          alert(`Circle API error: ${errMsg}\n\nFalling back to simulated deployment...`);
+          runSimulation();
+        }
+      } catch (err: any) {
+        console.error("Circle deploy error:", err);
+        alert(`Failed to call Circle API (CORS/Network error): ${err.message || err}\n\nFalling back to simulated deployment...`);
+        runSimulation();
+      }
+    } else {
+      // Missing credentials, run simulation
+      runSimulation();
+    }
+  };
+
   const handleCheckStatus = async () => {
     if (!deployedContract) return;
-    alert(`Checking status on Circle SCP...\n\nContract: ${deployedContract}\nStatus: ACTIVE\nNetwork: Arc Testnet`);
+
+    // If it looks like a deployment ID (not starting with 0x) and we have apiKey
+    if (!deployedContract.startsWith('0x') && apiKey) {
+      try {
+        const response = await fetch(`https://api-sandbox.circle.com/v1/w3s/smart-contracts/deployments/${deployedContract}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+        const data = await response.json();
+        if (response.ok && data.data) {
+          const status = data.data.status;
+          const contractAddress = data.data.contractAddress || 'Not deployed yet';
+          alert(`Deployment ID: ${deployedContract}\nStatus: ${status}\nContract Address: ${contractAddress}`);
+          if (data.data.contractAddress) {
+            setDeployedContract(data.data.contractAddress); // Update state to contract address once complete!
+          }
+        } else {
+          alert(`Error checking status: ${data.message || JSON.stringify(data)}`);
+        }
+      } catch (err: any) {
+        alert(`Network error checking status: ${err.message || err}`);
+      }
+    } else {
+      // Fake mock alert
+      alert(`Checking status on Circle SCP...\n\nContract Address: ${deployedContract}\nStatus: ACTIVE\nNetwork: Ethereum Sepolia`);
+    }
   };
 
   return (
@@ -119,6 +195,13 @@ export const CircleSmartContracts: React.FC = () => {
                   <option value="ERC721">ERC-721 NFT Collection</option>
                   <option value="MultiSig">Multi-Signature Wallet</option>
                 </select>
+              </div>
+
+              <div style={{ background: 'rgba(167, 139, 250, 0.05)', border: '1px dashed rgba(167, 139, 250, 0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', color: '#c084fc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>💡 Bạn muốn deploy một <strong>Smart Contract Solidity tùy chỉnh</strong>?</span>
+                <a href="/merchant-treasury" onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/merchant-treasury'); window.dispatchEvent(new PopStateEvent('popstate')); }} style={{ textDecoration: 'underline', fontWeight: 600, color: '#a78bfa' }}>
+                  Thử Custom Contract
+                </a>
               </div>
 
               <div className="input-group">

@@ -62,13 +62,14 @@ export async function switchOrAddArcNetwork(): Promise<boolean> {
   }
 }
 
-export async function switchOrAddNetwork(chainIdHex: string, chainName: string, rpcUrl: string, symbol: string, decimals: number, explorer: string): Promise<boolean> {
-  if (!window.ethereum) {
-    throw new Error("MetaMask is not installed");
+export async function switchOrAddNetwork(provider: any, chainIdHex: string, chainName: string, rpcUrl: string, symbol: string, decimals: number, explorer: string): Promise<boolean> {
+  const activeProvider = provider || window.ethereum;
+  if (!activeProvider) {
+    throw new Error("No wallet provider found");
   }
 
   try {
-    await window.ethereum.request({
+    await activeProvider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: chainIdHex }],
     });
@@ -76,7 +77,7 @@ export async function switchOrAddNetwork(chainIdHex: string, chainName: string, 
   } catch (switchError: any) {
     // Fallback: Attempt to add the network if switch fails for any reason
     try {
-      await window.ethereum.request({
+      await activeProvider.request({
         method: "wallet_addEthereumChain",
         params: [
           {

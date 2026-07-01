@@ -86,6 +86,13 @@ const TOKENS: { [symbol: string]: Token } = {
     address: '0xfa233bfc8efe970bd5f092e3a5115dcfa18828b8',
     icon: '🦄',
   },
+  cirBTC: {
+    symbol: 'cirBTC',
+    name: 'Circle Wrapped Bitcoin',
+    decimals: 8,
+    address: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF',
+    icon: '₿',
+  },
 };
 
 const POOLS_DATA: Pool[] = [
@@ -136,6 +143,18 @@ const POOLS_DATA: Pool[] = [
     fees24h: 126,
     apr: 10.8,
     currentPrice: 0.125, // 1 USDC = 0.125 UNI (1 UNI = 8 USDC)
+  },
+  {
+    id: 'pool-usdc-cirbtc',
+    token0: TOKENS.USDC,
+    token1: TOKENS.cirBTC,
+    feeTier: 3000, // 0.30%
+    feeLabel: '0.30%',
+    tvl: 8500000,
+    volume24h: 1200000,
+    fees24h: 3600,
+    apr: 18.5,
+    currentPrice: 0.0000166, // 1 USDC = 0.0000166 cirBTC (1 cirBTC = 60240 USDC)
   },
 ];
 

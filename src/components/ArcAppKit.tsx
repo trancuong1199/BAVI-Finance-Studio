@@ -148,7 +148,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
         const kit = new BridgeKit();
 
         // Ensure viem adapter connects to user's injected provider (EIP-1193)
-        const adapter = await createViemAdapterFromProvider(eth);
+        const adapter = await createViemAdapterFromProvider({ provider: eth });
 
         const finalRecipient = recipient.trim() || from;
 
@@ -197,7 +197,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
             bridgeDetails: resultObj
           };
 
-          setResult(JSON.stringify(bridgeResult, null, 2));
+          setResult(JSON.stringify(bridgeResult, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
 
           // Save to history
           saveTransaction({

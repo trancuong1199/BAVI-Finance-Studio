@@ -92,6 +92,7 @@ export const Bridge: React.FC<BridgeProps> = ({ adapter, userAddress, isMetaMask
         const netInfo = CHAIN_NETWORK_DETAILS[srcChain];
         if (netInfo) {
           const switched = await switchOrAddNetwork(
+            adapter,
             netInfo.chainIdHex,
             netInfo.chainName,
             netInfo.rpcUrl,

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 
 const API_KEY = 'TEST_API_KEY:ca21ddf43344f814a3b699f8205a961e:5b9d8a9098e9b24de94162eaa7c39fac';
-const BASE_URL = 'https://api.circle.com/v1/w3s';
+const BASE_URL = 'https://api-sandbox.circle.com/v1/w3s';
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${API_KEY}`,

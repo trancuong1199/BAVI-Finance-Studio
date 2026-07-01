@@ -10,6 +10,12 @@ interface SwapProps {
   onRefreshBalance: () => void;
 }
 
+const TOKEN_PRICES: Record<string, number> = {
+  USDC: 1.0,
+  EURC: 1.08,
+  cirBTC: 60000.0
+};
+
 export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, kitKey, onRefreshBalance }) => {
   const [tokenIn, setTokenIn] = useState("USDC");
   const [tokenOut, setTokenOut] = useState("EURC");
@@ -18,21 +24,23 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<{ type: "success" | "error" | "info"; msg: string; txHash?: string } | null>(null);
 
-  // Simple exchange rate for UI reference
-  const exchangeRate = tokenIn === "USDC" ? 0.92 : 1.08; // 1 USDC = 0.92 EURC
+  // Dynamic exchange rate calculation
+  const priceIn = TOKEN_PRICES[tokenIn] || 1.0;
+  const priceOut = TOKEN_PRICES[tokenOut] || 1.0;
+  const exchangeRate = priceIn / priceOut;
 
   useEffect(() => {
     if (amountIn) {
       const val = parseFloat(amountIn);
       if (!isNaN(val)) {
-        setAmountOut((val * exchangeRate).toFixed(6));
+        setAmountOut((val * exchangeRate).toFixed(tokenOut === 'cirBTC' ? 8 : 6));
       } else {
         setAmountOut("");
       }
     } else {
       setAmountOut("");
     }
-  }, [amountIn, tokenIn]);
+  }, [amountIn, tokenIn, tokenOut, exchangeRate]);
 
   const handleSwitchTokens = () => {
     setTokenIn(tokenOut);
@@ -100,7 +108,6 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
     } catch (err: any) {
       console.error(err);
       
-      // If missing kit key or failed, offer a rich mockup simulation option
       if (!kitKey || err.message.includes("Kit Key") || err.message.includes("401") || err.message.includes("unauthorized")) {
         setStatus({
           type: "error",
@@ -145,7 +152,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
           </svg>
           Token Swap
         </h2>
-        <p>Exchange one stablecoin for another instantly on the same blockchain (Arc Testnet).</p>
+        <p>Exchange stablecoins or wrapped assets instantly on the same blockchain (Arc Testnet).</p>
       </div>
 
       <form onSubmit={handleSwap}>
@@ -171,12 +178,15 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
                 onChange={(e) => {
                   const val = e.target.value;
                   setTokenIn(val);
-                  setTokenOut(val === "USDC" ? "EURC" : "USDC");
+                  if (val === tokenOut) {
+                    setTokenOut(val === "USDC" ? "EURC" : "USDC");
+                  }
                 }}
                 disabled={loading}
               >
                 <option value="USDC">USDC</option>
                 <option value="EURC">EURC</option>
+                <option value="cirBTC">cirBTC</option>
               </select>
             </div>
           </div>
@@ -206,12 +216,15 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
                 onChange={(e) => {
                   const val = e.target.value;
                   setTokenOut(val);
-                  setTokenIn(val === "USDC" ? "EURC" : "USDC");
+                  if (val === tokenIn) {
+                    setTokenIn(val === "USDC" ? "EURC" : "USDC");
+                  }
                 }}
                 disabled={loading}
               >
                 <option value="USDC">USDC</option>
                 <option value="EURC">EURC</option>
+                <option value="cirBTC">cirBTC</option>
               </select>
             </div>
           </div>
@@ -220,7 +233,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
         <div style={{ marginTop: "1rem", fontSize: "0.85rem", color: "var(--text-muted)", display: "flex", justifyContent: "space-between" }}>
           <span>Exchange Rate:</span>
           <span style={{ fontWeight: 600, color: "var(--color-primary)" }}>
-            1 {tokenIn} ≈ {exchangeRate} {tokenOut}
+            1 {tokenIn} ≈ {exchangeRate.toFixed(tokenOut === 'cirBTC' ? 8 : 6)} {tokenOut}
           </span>
         </div>
 

@@ -12,8 +12,33 @@ import { BackgroundAnimation } from './components/BackgroundAnimation';
 import { TransactionMemos } from './components/TransactionMemos';
 import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu } from 'lucide-react';
 import { UniswapPortal } from './components/UniswapPortal';
+import { UnifiedBalance } from './components/UnifiedBalance';
+import { MerchantTreasury } from './components/MerchantTreasury';
 
-type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos';
+// Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
+if (typeof window !== 'undefined') {
+  const originalFetch = window.fetch;
+  window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+    if (typeof input === 'string' && input.includes('/stablecoinKits/logs')) {
+      if (init && init.headers) {
+        if (init.headers instanceof Headers) {
+          init.headers.delete('x-user-agent');
+          init.headers.delete('X-User-Agent');
+        } else if (Array.isArray(init.headers)) {
+          init.headers = init.headers.filter(([key]) => key.toLowerCase() !== 'x-user-agent');
+        } else if (typeof init.headers === 'object') {
+          const newHeaders = { ...init.headers } as Record<string, string>;
+          delete newHeaders['x-user-agent'];
+          delete newHeaders['X-User-Agent'];
+          init.headers = newHeaders;
+        }
+      }
+    }
+    return originalFetch.call(this, input, init);
+  };
+}
+
+type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'unified-balance' | 'merchant-treasury';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -29,7 +54,7 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos'];
+  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'unified-balance', 'merchant-treasury'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
@@ -62,13 +87,20 @@ function App() {
   const [availableWallets, setAvailableWallets] = useState<EIP6963ProviderDetail[]>([]);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [connectedWalletInfo, setConnectedWalletInfo] = useState<EIP6963ProviderDetail['info'] | null>(null);
+  const [balancesState, setBalancesState] = useState<Record<string, string>>({
+    Arc_Testnet: '0.00',
+    Base_Sepolia: '0.00',
+    Arbitrum_Sepolia: '0.00',
+    Avalanche_Fuji: '0.00',
+    Ethereum_Sepolia: '0.00',
+  });
 
   // EIP-6963: Listen for wallets announcing themselves
   useEffect(() => {
     const handleAnnounce = (event: any) => {
       const detail: EIP6963ProviderDetail = event.detail;
       console.log('Discovered wallet:', detail.info.name);
-      
+
       setAvailableWallets(prev => {
         if (!prev.find(w => w.info.uuid === detail.info.uuid)) {
           return [...prev, detail];
@@ -192,218 +224,251 @@ function App() {
     <>
       <BackgroundAnimation />
       <div className="app-container">
-      <div className="mobile-header">
-        <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
-          <Activity color="#3b82f6" />
-          ARC Studio
-        </div>
-        <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
-          <Menu size={24} color="#f8fafc" />
-        </button>
-      </div>
-
-      {isMobileMenuOpen && (
-        <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
-      )}
-
-      <aside className={`sidebar animate-fade-in ${isMobileMenuOpen ? 'open' : ''}`}>
-        <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
-          <Activity color="#3b82f6" />
-          ARC Finance Studio
-        </div>
-
-        <div className="nav-links">
-          <a
-            className={`nav-link ${currentView === 'swap' ? 'active' : ''}`}
-            onClick={() => navigateTo('swap')}
-          >
-            Swap
-          </a>
-          <a
-            className={`nav-link ${currentView === 'uniswap' ? 'active' : ''}`}
-            onClick={() => navigateTo('uniswap')}
-            style={currentView === 'uniswap' ? { boxShadow: 'inset 4px 0 0 #ff007a', background: 'rgba(255, 0, 122, 0.15)', color: 'var(--text-primary)' } : {}}
-          >
-            Uniswap 🦄
-          </a>
-          <a
-            className={`nav-link ${currentView === 'payments' ? 'active' : ''}`}
-            onClick={() => navigateTo('payments')}
-          >
-            Payments
-          </a>
-          <a
-            className={`nav-link ${currentView === 'logs' ? 'active' : ''}`}
-            onClick={() => navigateTo('logs')}
-          >
-            API Logs
-          </a>
-          <a
-            className={`nav-link ${currentView === 'analytics' ? 'active' : ''}`}
-            onClick={() => navigateTo('analytics')}
-          >
-            Analytics
-          </a>
-          <a
-            className={`nav-link ${currentView === 'faucet' ? 'active' : ''}`}
-            onClick={() => navigateTo('faucet')}
-          >
-            Faucet
-          </a>
-          <a
-            className={`nav-link ${currentView === 'contracts' ? 'active' : ''}`}
-            onClick={() => navigateTo('contracts')}
-          >
-            Contracts
-          </a>
-          <a
-            className={`nav-link ${currentView === 'memos' ? 'active' : ''}`}
-            onClick={() => navigateTo('memos')}
-            style={currentView === 'memos' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
-          >
-            📋 Tx Memos
-          </a>
-          <a
-            className={`nav-link ${currentView === 'doc' ? 'active' : ''}`}
-            onClick={() => navigateTo('doc')}
-          >
-            Docs
-          </a>
-        </div>
-
-        <div className="header-controls">
-          <div className="status-pulse" style={{ borderRadius: '24px', cursor: 'default', width: 'fit-content' }}>
-            <div className="pulse-dot"></div>
-            Arc Testnet
+        <div className="mobile-header">
+          <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
+            <Activity color="#3b82f6" />
+            ARC Studio
           </div>
-
-          <button onClick={() => connectWallet()} className="wallet-button" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '24px', width: 'fit-content' }}>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              {connectedWalletInfo ? (
-                <img src={connectedWalletInfo.icon} alt={connectedWalletInfo.name} style={{ width: 24, height: 24, borderRadius: '50%' }} />
-              ) : (
-                <Wallet size={24} color="var(--text-secondary)" />
-              )}
-            </div>
-            
-            <span style={{ fontSize: '14px', fontWeight: 600, margin: '0 2px' }}>
-              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}
-            </span>
-            
-            <ChevronDown size={16} color="var(--text-secondary)" />
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
+            <Menu size={24} color="#f8fafc" />
           </button>
         </div>
-      </aside>
 
-      <div className="main-content-area">
-      {currentView === 'swap' && (
-        <main className="main-grid">
-          <NetworkStats connectedAccount={address} />
+        {isMobileMenuOpen && (
+          <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
+        )}
 
-          <div className="widget-switcher-container">
-            <div className="glass-panel widget-switcher">
-              <button
-                onClick={() => setActiveWidget('native')}
-                className={`switcher-btn ${activeWidget === 'native' ? 'active' : ''}`}
-              >
-                <Layers size={18} />
-                Native Arc
-              </button>
-              <button
-                onClick={() => setActiveWidget('lifi')}
-                className={`switcher-btn ${activeWidget === 'lifi' ? 'active' : ''}`}
-              >
-                <Repeat size={18} />
-                Universal (LI.FI)
-              </button>
-            </div>
-
-            <div className="animate-fade-in">
-              {activeWidget === 'native'
-                ? <ArcAppKit connectedAccount={address} getProvider={getProvider} />
-                : <SwapWidget />}
-            </div>
+        <aside className={`sidebar animate-fade-in ${isMobileMenuOpen ? 'open' : ''}`}>
+          <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
+            <Activity color="#3b82f6" />
+            ARC Finance Studio
           </div>
-        </main>
-      )}
 
-      {currentView === 'uniswap' && (
-        <main className="page-view" style={{ marginTop: '0' }}>
-          <UniswapPortal connectedAccount={address} getProvider={getProvider} />
-        </main>
-      )}
+          <div className="nav-links">
+            <a
+              className={`nav-link ${currentView === 'swap' ? 'active' : ''}`}
+              onClick={() => navigateTo('swap')}
+            >
+              Swap
+            </a>
+            <a
+              className={`nav-link ${currentView === 'uniswap' ? 'active' : ''}`}
+              onClick={() => navigateTo('uniswap')}
+              style={currentView === 'uniswap' ? { boxShadow: 'inset 4px 0 0 #ff007a', background: 'rgba(255, 0, 122, 0.15)', color: 'var(--text-primary)' } : {}}
+            >
+              Uniswap 🦄
+            </a>
+            <a
+              className={`nav-link ${currentView === 'payments' ? 'active' : ''}`}
+              onClick={() => navigateTo('payments')}
+            >
+              Payments
+            </a>
+            <a
+              className={`nav-link ${currentView === 'logs' ? 'active' : ''}`}
+              onClick={() => navigateTo('logs')}
+            >
+              API Logs
+            </a>
+            <a
+              className={`nav-link ${currentView === 'analytics' ? 'active' : ''}`}
+              onClick={() => navigateTo('analytics')}
+            >
+              Analytics
+            </a>
+            <a
+              className={`nav-link ${currentView === 'faucet' ? 'active' : ''}`}
+              onClick={() => navigateTo('faucet')}
+            >
+              Faucet
+            </a>
+            <a
+              className={`nav-link ${currentView === 'contracts' ? 'active' : ''}`}
+              onClick={() => navigateTo('contracts')}
+            >
+              Contracts
+            </a>
+            <a
+              className={`nav-link ${currentView === 'memos' ? 'active' : ''}`}
+              onClick={() => navigateTo('memos')}
+              style={currentView === 'memos' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
+            >
+              📋 Tx Memos
+            </a>
+            <a
+              className={`nav-link ${currentView === 'unified-balance' ? 'active' : ''}`}
+              onClick={() => navigateTo('unified-balance')}
+              style={currentView === 'unified-balance' ? { boxShadow: 'inset 4px 0 0 #8b5cf6', background: 'rgba(139, 92, 246, 0.15)', color: 'var(--text-primary)' } : {}}
+            >
+              🛡️ Unified Balance
+            </a>
+            <a
+              className={`nav-link ${currentView === 'merchant-treasury' ? 'active' : ''}`}
+              onClick={() => navigateTo('merchant-treasury')}
+              style={currentView === 'merchant-treasury' ? { boxShadow: 'inset 4px 0 0 #a78bfa', background: 'rgba(167, 139, 250, 0.15)', color: 'var(--text-primary)' } : {}}
+            >
+              🏺 Custom SCP Contract
+            </a>
+            <a
+              className={`nav-link ${currentView === 'doc' ? 'active' : ''}`}
+              onClick={() => navigateTo('doc')}
+            >
+              Docs
+            </a>
+          </div>
 
-      {currentView === 'payments' && (
-        <main className="page-view">
-          <Payments walletProvider={walletProvider} address={address || ''} />
-        </main>
-      )}
-
-      {currentView === 'logs' && (
-        <main className="page-view">
-          <Logs />
-        </main>
-      )}
-
-      {currentView === 'analytics' && (
-        <main className="page-view">
-          <Analytics />
-        </main>
-      )}
-
-      {currentView === 'faucet' && (
-        <main className="page-view">
-          <Faucet connectedAccount={address} />
-        </main>
-      )}
-
-      {currentView === 'contracts' && (
-        <main className="page-view">
-          <CircleSmartContracts />
-        </main>
-      )}
-
-      {currentView === 'memos' && (
-        <main className="page-view">
-          <TransactionMemos walletProvider={walletProvider} address={address || ''} />
-        </main>
-      )}
-
-      {currentView === 'doc' && (
-        <main className="page-view">
-          <FeaturesDoc />
-        </main>
-      )}
-
-      {/* Wallet Selection Modal */}
-      {showWalletModal && (
-        <div className="modal-overlay" onClick={() => setShowWalletModal(false)}>
-          <div className="wallet-modal" onClick={e => e.stopPropagation()}>
-            <div className="wallet-modal-header">
-              <h3 className="wallet-modal-title">Connect a Wallet</h3>
-              <button className="wallet-close-btn" onClick={() => setShowWalletModal(false)}>
-                <X size={20} />
-              </button>
+          <div className="header-controls">
+            <div className="status-pulse" style={{ borderRadius: '24px', cursor: 'default', width: 'fit-content' }}>
+              <div className="pulse-dot"></div>
+              Arc Testnet
             </div>
-            
-            <div className="wallet-list">
-              {availableWallets.map(wallet => (
-                <div 
-                  key={wallet.info.uuid} 
-                  className="wallet-item"
-                  onClick={() => connectWallet(wallet)}
-                >
-                  <img src={wallet.info.icon} alt={wallet.info.name} className="wallet-icon" />
-                  <span className="wallet-name">{wallet.info.name}</span>
-                  <span className="wallet-status">Detected</span>
+
+            <button onClick={() => connectWallet()} className="wallet-button" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '24px', width: 'fit-content' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                {connectedWalletInfo ? (
+                  <img src={connectedWalletInfo.icon} alt={connectedWalletInfo.name} style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                ) : (
+                  <Wallet size={24} color="var(--text-secondary)" />
+                )}
+              </div>
+
+              <span style={{ fontSize: '14px', fontWeight: 600, margin: '0 2px' }}>
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}
+              </span>
+
+              <ChevronDown size={16} color="var(--text-secondary)" />
+            </button>
+          </div>
+        </aside>
+
+        <div className="main-content-area">
+          {currentView === 'swap' && (
+            <main className="main-grid">
+              <NetworkStats connectedAccount={address} />
+
+              <div className="widget-switcher-container">
+                <div className="glass-panel widget-switcher">
+                  <button
+                    onClick={() => setActiveWidget('native')}
+                    className={`switcher-btn ${activeWidget === 'native' ? 'active' : ''}`}
+                  >
+                    <Layers size={18} />
+                    Native Arc
+                  </button>
+                  <button
+                    onClick={() => setActiveWidget('lifi')}
+                    className={`switcher-btn ${activeWidget === 'lifi' ? 'active' : ''}`}
+                  >
+                    <Repeat size={18} />
+                    Universal (LI.FI)
+                  </button>
                 </div>
-              ))}
+
+                <div className="animate-fade-in">
+                  {activeWidget === 'native'
+                    ? <ArcAppKit connectedAccount={address} getProvider={getProvider} />
+                    : <SwapWidget />}
+                </div>
+              </div>
+            </main>
+          )}
+
+          {currentView === 'uniswap' && (
+            <main className="page-view" style={{ marginTop: '0' }}>
+              <UniswapPortal connectedAccount={address} getProvider={getProvider} />
+            </main>
+          )}
+
+          {currentView === 'payments' && (
+            <main className="page-view">
+              <Payments walletProvider={walletProvider} address={address || ''} />
+            </main>
+          )}
+
+          {currentView === 'logs' && (
+            <main className="page-view">
+              <Logs />
+            </main>
+          )}
+
+          {currentView === 'analytics' && (
+            <main className="page-view">
+              <Analytics />
+            </main>
+          )}
+
+          {currentView === 'faucet' && (
+            <main className="page-view">
+              <Faucet connectedAccount={address} />
+            </main>
+          )}
+
+          {currentView === 'contracts' && (
+            <main className="page-view">
+              <CircleSmartContracts />
+            </main>
+          )}
+
+          {currentView === 'memos' && (
+            <main className="page-view">
+              <TransactionMemos walletProvider={walletProvider} address={address || ''} />
+            </main>
+          )}
+
+          {currentView === 'unified-balance' && (
+            <main className="page-view">
+              <UnifiedBalance
+                adapter={getProvider()}
+                userAddress={address || ''}
+                isMetaMask={connectedWalletInfo?.rdns === 'io.metamask'}
+                onRefreshBalance={() => console.log('Refresh Balance triggered')}
+                balancesState={balancesState}
+                setBalancesState={setBalancesState}
+              />
+            </main>
+          )}
+
+          {currentView === 'doc' && (
+            <main className="page-view">
+              <FeaturesDoc />
+            </main>
+          )}
+
+          {currentView === 'merchant-treasury' && (
+            <main className="page-view">
+              <MerchantTreasury connectedAccount={address} walletProvider={walletProvider} />
+            </main>
+          )}
+
+          {/* Wallet Selection Modal */}
+          {showWalletModal && (
+            <div className="modal-overlay" onClick={() => setShowWalletModal(false)}>
+              <div className="wallet-modal" onClick={e => e.stopPropagation()}>
+                <div className="wallet-modal-header">
+                  <h3 className="wallet-modal-title">Connect a Wallet</h3>
+                  <button className="wallet-close-btn" onClick={() => setShowWalletModal(false)}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="wallet-list">
+                  {availableWallets.map(wallet => (
+                    <div
+                      key={wallet.info.uuid}
+                      className="wallet-item"
+                      onClick={() => connectWallet(wallet)}
+                    >
+                      <img src={wallet.info.icon} alt={wallet.info.name} className="wallet-icon" />
+                      <span className="wallet-name">{wallet.info.name}</span>
+                      <span className="wallet-status">Detected</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
       </div>
-    </div>
     </>
   );
 }

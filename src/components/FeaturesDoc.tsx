@@ -87,6 +87,29 @@ export const FeaturesDoc: React.FC = () => {
           </div>
         </div>
 
+        {/* Vyper Agentic Payments - NEW */}
+        <div className="glass-panel" style={{ padding: '1.5rem', borderTop: '3px solid #3b82f6', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(59,130,246,0.15)', color: '#3b82f6', fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', border: '1px solid rgba(59,130,246,0.3)' }}>NEW</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+            <Shield size={28} color="#3b82f6" />
+            <h3 style={{ margin: 0 }}>Vyper Agentic Payments</h3>
+          </div>
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+            Secure autonomous agent interactions via identity and policy constraints:
+            <ul>
+              <li><strong>ERC-8004 Identity</strong> — Register agent schemas and capabilities</li>
+              <li><strong>Vyper Policy Control</strong> — Script spending limits and escrow logic</li>
+              <li><strong>Split Settlements</strong> — Automated payout distribution rules</li>
+              <li><strong>Stablecoin-Gas Payments</strong> — Native gas-free feeless transactions</li>
+            </ul>
+          </p>
+          <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <a href="https://community.arc.io/home/blogs/what-vypers-arc-testnet-work-opens-up-for-builders-of-agentic-financial-workflows-2026-06-26" target="_blank" rel="noreferrer" style={{ color: '#3b82f6', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none' }}>
+              <ExternalLink size={12} /> Vyper Agentic Payments
+            </a>
+          </div>
+        </div>
+
         {/* Payments Feature */}
         <div className="glass-panel" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
@@ -203,6 +226,9 @@ export const FeaturesDoc: React.FC = () => {
               </a>
               <a href="https://www.arc.io/blog/unified-balance-kit-production-safeguards-and-recovery-patterns-for-spend" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <ExternalLink size={16} /> Unified Balance Kit: Production Safeguards & Recovery Patterns
+              </a>
+              <a href="https://community.arc.io/home/blogs/what-vypers-arc-testnet-work-opens-up-for-builders-of-agentic-financial-workflows-2026-06-26" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <ExternalLink size={16} /> What Vyper's Arc Testnet Work Opens Up for Builders
               </a>
               <a href="https://docs.arc.io/arc-chain" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <ExternalLink size={16} /> ARC Chain Details

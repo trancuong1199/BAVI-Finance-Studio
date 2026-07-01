@@ -13,7 +13,8 @@ async function main() {
   
   const client = initiateDeveloperControlledWalletsClient({
     apiKey: API_KEY,
-    entitySecret: entitySecret
+    entitySecret: entitySecret,
+    baseUrl: 'https://api-sandbox.circle.com'
   });
   
   try {
@@ -43,7 +44,7 @@ async function main() {
     // No, the client provides it? The SDK handles it internally.
     // Let's fetch the public key and encrypt it so the frontend can use it.
     console.log("Fetching Public Key to encrypt secret for frontend use...");
-    let pubKeyRes = await fetch(`https://api.circle.com/v1/w3s/config/entity/publicKey`, {
+    let pubKeyRes = await fetch(`https://api-sandbox.circle.com/v1/w3s/config/entity/publicKey`, {
        headers: { 'Authorization': `Bearer ${API_KEY}` }
     });
     let pubKeyData = await pubKeyRes.json();
