@@ -265,12 +265,6 @@ function App() {
               Payments
             </a>
             <a
-              className={`nav-link ${currentView === 'logs' ? 'active' : ''}`}
-              onClick={() => navigateTo('logs')}
-            >
-              API Logs
-            </a>
-            <a
               className={`nav-link ${currentView === 'analytics' ? 'active' : ''}`}
               onClick={() => navigateTo('analytics')}
             >
@@ -283,31 +277,29 @@ function App() {
               Faucet
             </a>
             <a
-              className={`nav-link ${currentView === 'contracts' ? 'active' : ''}`}
-              onClick={() => navigateTo('contracts')}
-            >
-              Contracts
-            </a>
-            <a
               className={`nav-link ${currentView === 'memos' ? 'active' : ''}`}
               onClick={() => navigateTo('memos')}
               style={currentView === 'memos' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
             >
-              📋 Tx Memos
+              Tx Memos 📋
             </a>
             <a
               className={`nav-link ${currentView === 'unified-balance' ? 'active' : ''}`}
               onClick={() => navigateTo('unified-balance')}
               style={currentView === 'unified-balance' ? { boxShadow: 'inset 4px 0 0 #8b5cf6', background: 'rgba(139, 92, 246, 0.15)', color: 'var(--text-primary)' } : {}}
             >
-              🛡️ Unified Balance
+              Unified Balance 🛡️
             </a>
             <a
               className={`nav-link ${currentView === 'merchant-treasury' ? 'active' : ''}`}
               onClick={() => navigateTo('merchant-treasury')}
               style={currentView === 'merchant-treasury' ? { boxShadow: 'inset 4px 0 0 #a78bfa', background: 'rgba(167, 139, 250, 0.15)', color: 'var(--text-primary)' } : {}}
             >
-              🏺 Custom SCP Contract
+              <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: '1.25', fontSize: '1.1rem' }}>
+                <span>Custom SCP</span>
+                <span>Contract</span>
+              </span>
+              <span style={{ marginLeft: '10px', display: 'inline-flex', alignItems: 'center' }}>🏺</span>
             </a>
             <a
               className={`nav-link ${currentView === 'doc' ? 'active' : ''}`}

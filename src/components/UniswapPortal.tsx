@@ -967,6 +967,23 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
                 </span>
               </div>
 
+              {/* Live Wallet Warning Notice */}
+              {!isSimulationMode && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  background: 'rgba(245, 158, 11, 0.07)',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  fontSize: '0.8rem',
+                  color: '#f59e0b',
+                  lineHeight: '1.4',
+                  marginTop: '0.5rem',
+                  marginBottom: '0.5rem'
+                }}>
+                  ⚠️ <strong>Arc Testnet Notice:</strong> Public DEX stablecoin liquidity pools are not active on the testnet. Live wallet mode will submit a MetaMask transaction, but no actual tokens will be exchanged on-chain. For a working swap demonstration, please enable <strong>Simulation Active</strong> mode above.
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
