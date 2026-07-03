@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowDownUp, RefreshCw, Settings, Info, Plus, Layers } from 'lucide-react';
 import { saveTransaction, getTransactionHistory } from '../lib/TransactionHistory';
+import { BrowserProvider, Contract } from 'ethers';
 
 const ARC_CHAIN_ID = '0x4CEF52'; // 5042002 in hex
 const ARC_CHAIN_PARAMS = {
@@ -425,51 +426,77 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
           }
         }
 
-        setSwapStatus({ type: 'info', msg: 'Confirming Uniswap transaction in wallet...' });
+        const provider = new BrowserProvider(eth);
+        const signer = await provider.getSigner();
+
+        const CUSTOM_ROUTER_ADDRESS = import.meta.env.VITE_CIRCLE_DEPLOYED_CONTRACT || '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b';
         
-        // Uniswap v4 Mock Router Address on Arc Testnet
-        const MOCK_ROUTER_ADDRESS = '0xE592427A0CC86A461E2d486d38AAa1e7b686d11B';
+        const tokenInAddress = tokenIn.symbol === 'USDC' ? '0x0000000000000000000000000000000000000000' : tokenIn.address;
+        const tokenOutAddress = tokenOut.symbol === 'USDC' ? '0x0000000000000000000000000000000000000000' : tokenOut.address;
         
-        let txParams: any = {};
+        const decimalsIn = tokenIn.decimals;
+        const amountInBigInt = BigInt(Math.floor(parseFloat(amountIn) * Math.pow(10, decimalsIn)));
+        
+        const decimalsOut = tokenOut.decimals;
+        const amountOutMinBigInt = BigInt(Math.floor(parseFloat(amountOut) * (1 - parseFloat(activeSlippage)/100) * Math.pow(10, decimalsOut)));
+
+        let txHash;
+
         if (tokenIn.symbol === 'USDC') {
-          // Native USDC (18 decimals)
-          const amountWei = BigInt(Math.floor(parseFloat(amountIn) * 1e18));
-          txParams = {
-            from: connectedAccount,
-            to: MOCK_ROUTER_ADDRESS,
-            value: '0x' + amountWei.toString(16),
-            data: '0x',
-          };
-        } else {
-          // ERC-20 Token (EURC, wJPY, wGOLD, UNI)
-          const decimals = tokenIn.decimals;
-          const amountBigInt = BigInt(Math.floor(parseFloat(amountIn) * Math.pow(10, decimals)));
+          // Native Gas Token (USDC)
+          setSwapStatus({ type: 'info', msg: 'Confirming swap transaction in your wallet...' });
           
-          // Encode approve(spender, amount)
-          // Selector for approve(address,uint256) is 0x095ea7b3
-          const spenderPadded = MOCK_ROUTER_ADDRESS.toLowerCase().replace('0x', '').padStart(64, '0');
-          const amountPadded = amountBigInt.toString(16).padStart(64, '0');
-          const data = '0x095ea7b3' + spenderPadded + amountPadded;
+          const routerContract = new Contract(CUSTOM_ROUTER_ADDRESS, [
+            "function swapExactTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin) external payable"
+          ], signer);
 
-          txParams = {
-            from: connectedAccount,
-            to: tokenIn.address.toLowerCase(),
-            value: '0x0',
-            data: data,
-          };
+          const tx = await routerContract.swapExactTokens(
+            tokenInAddress,
+            tokenOutAddress,
+            amountInBigInt,
+            amountOutMinBigInt,
+            { value: amountInBigInt }
+          );
+
+          setSwapStatus({ type: 'info', msg: 'Waiting for swap transaction to be confirmed...' });
+          const receipt = await tx.wait();
+          txHash = receipt.hash;
+        } else {
+          // ERC-20 Token (EURC, cirBTC, etc.)
+          setSwapStatus({ type: 'info', msg: `Step 1: Approving contract ${CUSTOM_ROUTER_ADDRESS} to spend ${tokenIn.symbol}...` });
+          
+          const erc20Contract = new Contract(tokenIn.address, [
+            "function approve(address spender, uint256 amount) returns (bool)"
+          ], signer);
+
+          const approveTx = await erc20Contract.approve(CUSTOM_ROUTER_ADDRESS, amountInBigInt);
+          setSwapStatus({ type: 'info', msg: 'Waiting for approval confirmation...' });
+          await approveTx.wait();
+
+          setSwapStatus({ type: 'info', msg: 'Step 2: Executing swap via custom contract router...' });
+
+          const routerContract = new Contract(CUSTOM_ROUTER_ADDRESS, [
+            "function swapExactTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin) external payable"
+          ], signer);
+
+          const tx = await routerContract.swapExactTokens(
+            tokenInAddress,
+            tokenOutAddress,
+            amountInBigInt,
+            amountOutMinBigInt
+          );
+
+          setSwapStatus({ type: 'info', msg: 'Waiting for swap transaction to be confirmed...' });
+          const receipt = await tx.wait();
+          txHash = receipt.hash;
         }
-
-        const txHash = await eth.request({
-          method: 'eth_sendTransaction',
-          params: [txParams],
-        });
 
         const record = {
           id: `tx-${Date.now()}`,
-          action: 'Uniswap Swap (Onchain)',
+          action: `Swap via Contract (Onchain)`,
           amount: amountIn,
           from: connectedAccount,
-          to: 'Uniswap v4 Router',
+          to: CUSTOM_ROUTER_ADDRESS,
           txHash,
           status: 'COMPLETE' as const,
           explorerUrl: `https://testnet.arcscan.app/tx/${txHash}`,
@@ -480,7 +507,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
         saveTransaction(record);
         setSwapStatus({
           type: 'success',
-          msg: `Successfully submitted trade transaction on Arc Testnet!`,
+          msg: `Successfully swapped ${amountIn} ${tokenIn.symbol} for ${amountOut} ${tokenOut.symbol} via your custom contract router!`,
           txHash,
         });
         setAmountIn('');

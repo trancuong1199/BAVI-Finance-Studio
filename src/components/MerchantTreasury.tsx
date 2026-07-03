@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw } from 'lucide-react';
+import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink } from 'lucide-react';
 import { BrowserProvider, parseUnits, formatUnits, Contract, JsonRpcProvider } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
 import { saveTransaction } from '../lib/TransactionHistory';
@@ -46,6 +46,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSimulated, setIsSimulated] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [txHistory, setTxHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     setUsdcAddress(TOKEN_CONFIGS[selectedToken].address);
@@ -210,6 +212,182 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   };
 
   // 2. Interaction Handlers
+  const fetchOnChainHistory = async () => {
+    if (!deployedContractAddress) return;
+    if (isSimulated) {
+      setTxHistory([
+        {
+          id: 'mock-1',
+          type: 'deposit',
+          action: 'Deposit to Vault',
+          address: connectedAccount || '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e',
+          amount: depositAmount || '10.0',
+          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          blockNumber: 1250321,
+          timestamp: Date.now() - 3600 * 1000 * 2,
+        },
+        {
+          id: 'mock-2',
+          type: 'withdraw',
+          action: 'Withdraw from Vault',
+          address: ownerAddress,
+          amount: '15.0',
+          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          blockNumber: 1250210,
+          timestamp: Date.now() - 3600 * 1000 * 24,
+        },
+        {
+          id: 'mock-3',
+          type: 'swap',
+          action: 'Swap: USDC → EURC',
+          address: connectedAccount || '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e',
+          amount: '50.0',
+          tokenSymbol: 'USDC',
+          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          blockNumber: 1250150,
+          timestamp: Date.now() - 3600 * 1000 * 48,
+        }
+      ]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      let provider;
+      if (walletProvider) {
+        provider = new BrowserProvider(walletProvider);
+      } else {
+        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      }
+
+      const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
+
+      // Query events
+      const depositFilter = contract.filters.PaymentReceived();
+      const withdrawFilter = contract.filters.FundsWithdrawn();
+
+      const [depositEvents, withdrawEvents] = await Promise.all([
+        contract.queryFilter(depositFilter, 0, 'latest'),
+        contract.queryFilter(withdrawFilter, 0, 'latest')
+      ]);
+
+      let swapEvents: any[] = [];
+      try {
+        if (contract.filters.SwapRouted) {
+          const swapFilter = contract.filters.SwapRouted();
+          swapEvents = await contract.queryFilter(swapFilter, 0, 'latest');
+        }
+      } catch (e) {
+        console.warn("SwapRouted filter query failed", e);
+      }
+
+      const formattedTxs: any[] = [];
+      const decimals = TOKEN_CONFIGS[selectedToken].decimals;
+
+      // Map deposit events
+      for (const event of depositEvents) {
+        if ('args' in event && event.args) {
+          const sender = event.args[0];
+          const amount = event.args[1];
+          formattedTxs.push({
+            id: `dep-${event.transactionHash}-${event.index}`,
+            type: 'deposit',
+            action: 'Deposit to Vault',
+            address: sender,
+            amount: formatUnits(amount, decimals),
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            timestamp: 0,
+          });
+        }
+      }
+
+      // Map withdraw events
+      for (const event of withdrawEvents) {
+        if ('args' in event && event.args) {
+          const to = event.args[0];
+          const amount = event.args[1];
+          formattedTxs.push({
+            id: `wit-${event.transactionHash}-${event.index}`,
+            type: 'withdraw',
+            action: 'Withdraw from Vault',
+            address: to,
+            amount: formatUnits(amount, decimals),
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            timestamp: 0,
+          });
+        }
+      }
+
+      // Map swap events
+      for (const event of swapEvents) {
+        if ('args' in event && event.args) {
+          const user = event.args[0];
+          const tokenInAddr = event.args[1];
+          const tokenOutAddr = event.args[2];
+          const amountInVal = event.args[3];
+
+          let inSymbol = 'USDC';
+          let inDecimals = 6;
+          if (tokenInAddr.toLowerCase() === TOKEN_CONFIGS.EURC.address.toLowerCase()) {
+            inSymbol = 'EURC';
+            inDecimals = 6;
+          } else if (tokenInAddr.toLowerCase() === TOKEN_CONFIGS.cirBTC.address.toLowerCase()) {
+            inSymbol = 'cirBTC';
+            inDecimals = 8;
+          } else if (tokenInAddr === '0x0000000000000000000000000000000000000000') {
+            inSymbol = 'USDC';
+            inDecimals = 18;
+          }
+
+          let outSymbol = 'EURC';
+          if (tokenOutAddr.toLowerCase() === TOKEN_CONFIGS.USDC.address.toLowerCase()) {
+            outSymbol = 'USDC';
+          } else if (tokenOutAddr.toLowerCase() === TOKEN_CONFIGS.cirBTC.address.toLowerCase()) {
+            outSymbol = 'cirBTC';
+          } else if (tokenOutAddr === '0x0000000000000000000000000000000000000000') {
+            outSymbol = 'USDC';
+          }
+
+          formattedTxs.push({
+            id: `swap-${event.transactionHash}-${event.index}`,
+            type: 'swap',
+            action: `Swap: ${inSymbol} → ${outSymbol}`,
+            address: user,
+            amount: formatUnits(amountInVal, inDecimals),
+            tokenSymbol: inSymbol,
+            txHash: event.transactionHash,
+            blockNumber: event.blockNumber,
+            timestamp: 0,
+          });
+        }
+      }
+
+      // Sort by blockNumber descending, then fetch timestamps for the top 10
+      formattedTxs.sort((a, b) => b.blockNumber - a.blockNumber);
+      const topTxs = formattedTxs.slice(0, 10);
+
+      // Fetch block timestamps in parallel
+      await Promise.all(topTxs.map(async (tx) => {
+        try {
+          const block = await provider.getBlock(tx.blockNumber);
+          if (block) {
+            tx.timestamp = block.timestamp * 1000;
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch block ${tx.blockNumber}`, e);
+        }
+      }));
+
+      setTxHistory(topTxs);
+    } catch (e) {
+      console.error("Error fetching event history:", e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   const handleRefresh = async () => {
     if (!deployedContractAddress) return;
     setIsRefreshing(true);
@@ -222,6 +400,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         setVaultUsdcAddress(usdcAddress);
         setIsRefreshing(false);
         addLog(`[SIMULATION] Refreshed successfully.`);
+        fetchOnChainHistory();
       }, 1000);
       return;
     }
@@ -249,6 +428,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       addLog(`On-chain state updated successfully.`);
       addLog(`Treasury balance: ${formatUnits(balanceVal, decimals)} ${selectedToken}`);
+      
+      fetchOnChainHistory();
     } catch (err: any) {
       addLog(`Error querying on-chain state: ${err.message || err}`);
       if (!vaultOwner) {
@@ -289,6 +470,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           tokenSymbol: selectedToken
         });
         setLoading(false);
+        handleRefresh();
       }, 1500);
       return;
     }
@@ -365,6 +547,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           tokenSymbol: selectedToken
         });
         setLoading(false);
+        handleRefresh();
       }, 1500);
       return;
     }
@@ -740,6 +923,119 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   </p>
                 </div>
 
+              </div>
+
+              {/* On-Chain Treasury Activity Card */}
+              <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, color: '#fff', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Activity size={18} color="#a78bfa" /> On-Chain Treasury Activity
+                  </h4>
+                  <button 
+                    onClick={fetchOnChainHistory} 
+                    disabled={historyLoading || isRefreshing}
+                    style={{ background: 'transparent', border: 'none', color: '#c084fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}
+                  >
+                    <RefreshCw size={14} className={historyLoading ? 'animate-spin' : ''} /> Sync History
+                  </button>
+                </div>
+
+                {historyLoading ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#a1a1aa' }}>
+                    <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 1rem', display: 'block' }} />
+                    Querying on-chain logs...
+                  </div>
+                ) : txHistory.length === 0 ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#71717a', fontSize: '0.9rem', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    No deposits or withdrawals recorded yet for this contract address.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '350px', overflowY: 'auto' }}>
+                    {txHistory.map((tx) => {
+                      const isDeposit = tx.type === 'deposit';
+                      const isWithdraw = tx.type === 'withdraw';
+                      const isSwap = tx.type === 'swap';
+
+                      let bg = 'rgba(239, 68, 68, 0.03)';
+                      let border = 'rgba(239, 68, 68, 0.1)';
+                      let iconBg = 'rgba(239, 68, 68, 0.1)';
+                      let iconColor = '#f87171';
+                      let icon = <ArrowUpRight size={18} />;
+
+                      if (isDeposit) {
+                        bg = 'rgba(16, 185, 129, 0.03)';
+                        border = 'rgba(16, 185, 129, 0.1)';
+                        iconBg = 'rgba(16, 185, 129, 0.1)';
+                        iconColor = '#34d399';
+                        icon = <ArrowDownLeft size={18} />;
+                      } else if (isSwap) {
+                        bg = 'rgba(167, 139, 250, 0.03)';
+                        border = 'rgba(167, 139, 250, 0.1)';
+                        iconBg = 'rgba(167, 139, 250, 0.1)';
+                        iconColor = '#a78bfa';
+                        icon = <Coins size={18} />;
+                      }
+
+                      return (
+                        <div 
+                          key={tx.id} 
+                          style={{ 
+                            background: bg, 
+                            border: `1px solid ${border}`, 
+                            borderRadius: '10px', 
+                            padding: '0.85rem 1rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '1rem'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <div style={{ 
+                              width: '36px', 
+                              height: '36px', 
+                              borderRadius: '8px', 
+                              background: iconBg,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: iconColor
+                            }}>
+                              {icon}
+                            </div>
+                            <div style={{ textAlign: 'left' }}>
+                              <div style={{ fontWeight: 600, color: '#fff', fontSize: '0.9rem' }}>
+                                {isDeposit ? 'Deposit Received' : isWithdraw ? 'Funds Withdrawn' : tx.action}
+                              </div>
+                              <div style={{ fontSize: '0.8rem', color: '#a1a1aa', fontFamily: 'monospace' }}>
+                                {isDeposit ? 'From: ' : isWithdraw ? 'To: ' : 'User: '}{tx.address.slice(0, 6)}...{tx.address.slice(-4)}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                            <div style={{ fontWeight: 700, color: isDeposit ? '#34d399' : isWithdraw ? '#f87171' : '#a78bfa', fontSize: '1rem' }}>
+                              {isDeposit ? '+' : isWithdraw ? '-' : '⇄ '}{parseFloat(tx.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} {tx.tokenSymbol || selectedToken}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#71717a', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <span>{tx.timestamp ? new Date(tx.timestamp).toLocaleString() : `Block #${tx.blockNumber}`}</span>
+                              {!isSimulated && tx.txHash && (
+                                <a 
+                                  href={`https://testnet.arcscan.app/tx/${tx.txHash}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#c084fc', display: 'inline-flex', alignItems: 'center' }}
+                                >
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Circle API status checking for real deploy */}
