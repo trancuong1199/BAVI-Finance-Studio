@@ -12,7 +12,6 @@ import { BackgroundAnimation } from './components/BackgroundAnimation';
 import { TransactionMemos } from './components/TransactionMemos';
 import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu } from 'lucide-react';
 import { UniswapPortal } from './components/UniswapPortal';
-import { UnifiedBalance } from './components/UnifiedBalance';
 import { MerchantTreasury } from './components/MerchantTreasury';
 
 // Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
@@ -38,7 +37,7 @@ if (typeof window !== 'undefined') {
   };
 }
 
-type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'unified-balance' | 'merchant-treasury';
+type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -54,7 +53,7 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'unified-balance', 'merchant-treasury'];
+  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
@@ -87,13 +86,6 @@ function App() {
   const [availableWallets, setAvailableWallets] = useState<EIP6963ProviderDetail[]>([]);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [connectedWalletInfo, setConnectedWalletInfo] = useState<EIP6963ProviderDetail['info'] | null>(null);
-  const [balancesState, setBalancesState] = useState<Record<string, string>>({
-    Arc_Testnet: '0.00',
-    Base_Sepolia: '0.00',
-    Arbitrum_Sepolia: '0.00',
-    Avalanche_Fuji: '0.00',
-    Ethereum_Sepolia: '0.00',
-  });
 
   // EIP-6963: Listen for wallets announcing themselves
   useEffect(() => {
@@ -284,13 +276,6 @@ function App() {
               Tx Memos 📋
             </a>
             <a
-              className={`nav-link ${currentView === 'unified-balance' ? 'active' : ''}`}
-              onClick={() => navigateTo('unified-balance')}
-              style={currentView === 'unified-balance' ? { boxShadow: 'inset 4px 0 0 #8b5cf6', background: 'rgba(139, 92, 246, 0.15)', color: 'var(--text-primary)' } : {}}
-            >
-              Unified Balance 🛡️
-            </a>
-            <a
               className={`nav-link ${currentView === 'merchant-treasury' ? 'active' : ''}`}
               onClick={() => navigateTo('merchant-treasury')}
               style={currentView === 'merchant-treasury' ? { boxShadow: 'inset 4px 0 0 #a78bfa', background: 'rgba(167, 139, 250, 0.15)', color: 'var(--text-primary)' } : {}}
@@ -407,18 +392,7 @@ function App() {
             </main>
           )}
 
-          {currentView === 'unified-balance' && (
-            <main className="page-view">
-              <UnifiedBalance
-                adapter={getProvider()}
-                userAddress={address || ''}
-                isMetaMask={connectedWalletInfo?.rdns === 'io.metamask'}
-                onRefreshBalance={() => console.log('Refresh Balance triggered')}
-                balancesState={balancesState}
-                setBalancesState={setBalancesState}
-              />
-            </main>
-          )}
+
 
           {currentView === 'doc' && (
             <main className="page-view">
