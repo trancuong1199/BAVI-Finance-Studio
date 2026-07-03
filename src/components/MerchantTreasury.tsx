@@ -262,23 +262,46 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
-      // Query events
+      // Query events in chunks of 10,000 blocks to comply with Arc RPC limit (maximum 10,000 range)
       const depositFilter = contract.filters.PaymentReceived();
       const withdrawFilter = contract.filters.FundsWithdrawn();
 
-      const [depositEvents, withdrawEvents] = await Promise.all([
-        contract.queryFilter(depositFilter, 0, 'latest'),
-        contract.queryFilter(withdrawFilter, 0, 'latest')
-      ]);
+      const currentBlock = await provider.getBlockNumber();
+      const deployBlock = 49591041; // Contract deployment block height on Arc Testnet
+      const chunkSize = 10000;
 
+      let depositEvents: any[] = [];
+      let withdrawEvents: any[] = [];
       let swapEvents: any[] = [];
-      try {
-        if (contract.filters.SwapRouted) {
-          const swapFilter = contract.filters.SwapRouted();
-          swapEvents = await contract.queryFilter(swapFilter, 0, 'latest');
+
+      let toBlock = currentBlock;
+      let fromBlock = Math.max(deployBlock, toBlock - chunkSize + 1);
+
+      while (toBlock >= deployBlock && (depositEvents.length + withdrawEvents.length + swapEvents.length) < 20) {
+        const [depChunk, witChunk] = await Promise.all([
+          contract.queryFilter(depositFilter, fromBlock, toBlock),
+          contract.queryFilter(withdrawFilter, fromBlock, toBlock)
+        ]);
+
+        depositEvents = [...depositEvents, ...depChunk];
+        withdrawEvents = [...withdrawEvents, ...witChunk];
+
+        try {
+          if (contract.filters.SwapRouted) {
+            const swapFilter = contract.filters.SwapRouted();
+            const swapChunk = await contract.queryFilter(swapFilter, fromBlock, toBlock);
+            swapEvents = [...swapEvents, ...swapChunk];
+          }
+        } catch (e) {
+          console.warn("SwapRouted filter query failed", e);
         }
-      } catch (e) {
-        console.warn("SwapRouted filter query failed", e);
+
+        if (fromBlock === deployBlock) {
+          break; // reached deployment block
+        }
+
+        toBlock = fromBlock - 1;
+        fromBlock = Math.max(deployBlock, toBlock - chunkSize + 1);
       }
 
       const formattedTxs: any[] = [];
