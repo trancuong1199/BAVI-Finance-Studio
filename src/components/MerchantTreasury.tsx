@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink } from 'lucide-react';
 import { BrowserProvider, parseUnits, formatUnits, Contract, JsonRpcProvider } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
@@ -31,12 +32,13 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const [contracts, setContracts] = useState<DeployedContracts>(() => {
     const saved = localStorage.getItem('arc_merchant_treasuries');
     const defaultEURC = '0x28805311caef7d48484b36cda5266449caeb493e';
+    const defaultCirBTC = '0x06f9ca202abc362ff528b8c8c9617495db597d92';
     const defaultUSDC = initialContract;
 
     let loaded = {
       USDC: { address: defaultUSDC, txHash: initialTx, isSimulated: false },
       EURC: { address: defaultEURC, txHash: '', isSimulated: false },
-      cirBTC: { address: '', txHash: '', isSimulated: false }
+      cirBTC: { address: defaultCirBTC, txHash: '', isSimulated: false }
     };
 
     if (saved) {
@@ -44,13 +46,30 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         const parsed = JSON.parse(saved);
         if (parsed.USDC && parsed.EURC && parsed.cirBTC) {
           loaded = parsed;
+          
+          let needsUpdate = false;
+
           // Upgrade empty/mock EURC address or incorrect wallet addresses to the newly deployed EURC contract
-          const isUserWallet = loaded.EURC.address && (
+          const isUserWalletEURC = loaded.EURC.address && (
             loaded.EURC.address.toLowerCase() === '0xb9bd0ba29287c0493f1cc0ecd8c706f169332954'.toLowerCase() ||
-            loaded.EURC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497e435cf25b65001d224'.toLowerCase()
+            loaded.EURC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497E435cF25b65001D224'.toLowerCase()
           );
-          if (!loaded.EURC.address || loaded.EURC.isSimulated || loaded.EURC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWallet) {
+          if (!loaded.EURC.address || loaded.EURC.isSimulated || loaded.EURC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWalletEURC) {
             loaded.EURC = { address: defaultEURC, txHash: '', isSimulated: false };
+            needsUpdate = true;
+          }
+
+          // Upgrade empty/mock cirBTC address or incorrect wallet addresses to the newly deployed cirBTC contract
+          const isUserWalletCirBTC = loaded.cirBTC.address && (
+            loaded.cirBTC.address.toLowerCase() === '0xb9bd0ba29287c0493f1cc0ecd8c706f169332954'.toLowerCase() ||
+            loaded.cirBTC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497E435cF25b65001D224'.toLowerCase()
+          );
+          if (!loaded.cirBTC.address || loaded.cirBTC.isSimulated || loaded.cirBTC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWalletCirBTC) {
+            loaded.cirBTC = { address: defaultCirBTC, txHash: '', isSimulated: false };
+            needsUpdate = true;
+          }
+
+          if (needsUpdate) {
             localStorage.setItem('arc_merchant_treasuries', JSON.stringify(loaded));
           }
         }
@@ -137,6 +156,14 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const [txHistory, setTxHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [simulatedTransactions, setSimulatedTransactions] = useState<any[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const activeTabRef = React.useRef(activeTab);
   useEffect(() => {
@@ -175,7 +202,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    setToast('Copied to clipboard!');
   };
 
   // Switch tabs handler
@@ -1246,6 +1273,41 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           )}
         </div>
       </div>
+
+      {toast && createPortal(
+        <>
+          <style>{`
+            @keyframes toastSlideIn {
+              from { transform: translateX(100%); opacity: 0; }
+              to { transform: translateX(0); opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            background: 'rgba(124, 58, 237, 0.95)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#fff',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.3)',
+            zIndex: 99999, // Ensure it floats on top of everything
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            animation: 'toastSlideIn 0.3s ease-out',
+            pointerEvents: 'none'
+          }}>
+            <CheckCircle size={18} color="#34d399" />
+            {toast}
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 };
