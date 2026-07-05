@@ -27,14 +27,15 @@ export const SUPPORTED_CHAINS = [
   { name: "Ethereum Sepolia", id: "Ethereum_Sepolia", chainIdHex: "0xaa36a7", isArc: false },
 ];
 
-export async function switchOrAddArcNetwork(): Promise<boolean> {
-  if (!window.ethereum) {
-    throw new Error("MetaMask is not installed");
+export async function switchOrAddArcNetwork(provider?: any): Promise<boolean> {
+  const activeProvider = provider || window.ethereum;
+  if (!activeProvider) {
+    throw new Error("Wallet provider is not available");
   }
 
   try {
     // Try switching first
-    await window.ethereum.request({
+    await activeProvider.request({
       method: "wallet_switchEthereumChain",
       params: [{ chainId: ARC_TESTNET_CONFIG.chainId }],
     });
@@ -42,7 +43,7 @@ export async function switchOrAddArcNetwork(): Promise<boolean> {
   } catch (switchError: any) {
     // Fallback: Attempt to add the network if switch fails for any reason
     try {
-      await window.ethereum.request({
+      await activeProvider.request({
         method: "wallet_addEthereumChain",
         params: [
           {

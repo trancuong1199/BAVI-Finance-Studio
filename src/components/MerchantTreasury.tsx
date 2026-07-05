@@ -3,6 +3,7 @@ import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, Use
 import { BrowserProvider, parseUnits, formatUnits, Contract, JsonRpcProvider } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
 import { saveTransaction } from '../lib/TransactionHistory';
+import { switchOrAddArcNetwork } from '../utils/arcChain';
 
 interface MerchantTreasuryProps {
   connectedAccount: string | null;
@@ -17,16 +18,104 @@ const TOKEN_CONFIGS = {
 
 type TokenType = 'USDC' | 'EURC' | 'cirBTC';
 
+interface DeployedContracts {
+  USDC: { address: string; txHash: string; isSimulated: boolean };
+  EURC: { address: string; txHash: string; isSimulated: boolean };
+  cirBTC: { address: string; txHash: string; isSimulated: boolean };
+}
+
 export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAccount, walletProvider }) => {
   const initialContract = import.meta.env.VITE_CIRCLE_DEPLOYED_CONTRACT || '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b';
   const initialTx = import.meta.env.VITE_CIRCLE_DEPLOY_TX_HASH || '0x639b0d0bb92940c05fa949b5d91bfdb4c876666ecdf5bf68903225e0a319c566';
 
+  const [contracts, setContracts] = useState<DeployedContracts>(() => {
+    const saved = localStorage.getItem('arc_merchant_treasuries');
+    const defaultEURC = '0x28805311caef7d48484b36cda5266449caeb493e';
+    const defaultUSDC = initialContract;
+
+    let loaded = {
+      USDC: { address: defaultUSDC, txHash: initialTx, isSimulated: false },
+      EURC: { address: defaultEURC, txHash: '', isSimulated: false },
+      cirBTC: { address: '', txHash: '', isSimulated: false }
+    };
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.USDC && parsed.EURC && parsed.cirBTC) {
+          loaded = parsed;
+          // Upgrade empty/mock EURC address or incorrect wallet addresses to the newly deployed EURC contract
+          const isUserWallet = loaded.EURC.address && (
+            loaded.EURC.address.toLowerCase() === '0xb9bd0ba29287c0493f1cc0ecd8c706f169332954'.toLowerCase() ||
+            loaded.EURC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497e435cf25b65001d224'.toLowerCase()
+          );
+          if (!loaded.EURC.address || loaded.EURC.isSimulated || loaded.EURC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWallet) {
+            loaded.EURC = { address: defaultEURC, txHash: '', isSimulated: false };
+            localStorage.setItem('arc_merchant_treasuries', JSON.stringify(loaded));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse saved contracts:", e);
+      }
+    }
+    return loaded;
+  });
+
   const [selectedToken, setSelectedToken] = useState<TokenType>('USDC');
+
+  // Derived state from persisted contracts map
+  const currentContract = contracts[selectedToken];
+  const deployedContractAddress = currentContract.address;
+  const deploymentTxHash = currentContract.txHash;
+  const isSimulated = currentContract.isSimulated;
+
   const [activeTab, setActiveTab] = useState<'deploy' | 'interact'>(initialContract ? 'interact' : 'deploy');
   const [loading, setLoading] = useState(false);
-  const [deployedContractAddress, setDeployedContractAddress] = useState<string>(initialContract);
-  const [deploymentTxHash, setDeploymentTxHash] = useState<string>(initialTx);
   const [circleDeploymentId, setCircleDeploymentId] = useState<string>('');
+
+  const updateContractState = (address: string, txHash: string, simulated: boolean) => {
+    setContracts(prev => {
+      const updated = {
+        ...prev,
+        [selectedToken]: { address, txHash, isSimulated: simulated }
+      };
+      localStorage.setItem('arc_merchant_treasuries', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const setDeployedContractAddress = (addr: string) => {
+    setContracts(prev => {
+      const updated = {
+        ...prev,
+        [selectedToken]: { ...prev[selectedToken], address: addr }
+      };
+      localStorage.setItem('arc_merchant_treasuries', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const setDeploymentTxHash = (hash: string) => {
+    setContracts(prev => {
+      const updated = {
+        ...prev,
+        [selectedToken]: { ...prev[selectedToken], txHash: hash }
+      };
+      localStorage.setItem('arc_merchant_treasuries', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const setIsSimulated = (sim: boolean) => {
+    setContracts(prev => {
+      const updated = {
+        ...prev,
+        [selectedToken]: { ...prev[selectedToken], isSimulated: sim }
+      };
+      localStorage.setItem('arc_merchant_treasuries', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   // Settings state (Circle Credentials)
   const [showSettings, setShowSettings] = useState(false);
@@ -44,25 +133,33 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const [vaultOwner, setVaultOwner] = useState<string>('');
   const [vaultUsdcAddress, setVaultUsdcAddress] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isSimulated, setIsSimulated] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [txHistory, setTxHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [simulatedTransactions, setSimulatedTransactions] = useState<any[]>([]);
+
+  const activeTabRef = React.useRef(activeTab);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
-    setUsdcAddress(TOKEN_CONFIGS[selectedToken].address);
+    // Clear query states to avoid displaying stale data from other tokens
     setVaultBalance('0');
-    
-    if (selectedToken === 'USDC') {
+    setVaultOwner('');
+    setVaultUsdcAddress('');
+    setTxHistory([]);
+    setUsdcAddress(TOKEN_CONFIGS[selectedToken].address);
+
+    const existing = contracts[selectedToken];
+    if (selectedToken === 'USDC' && !existing.address) {
       const usdcContract = import.meta.env.VITE_CIRCLE_DEPLOYED_CONTRACT || '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b';
       const usdcTx = import.meta.env.VITE_CIRCLE_DEPLOY_TX_HASH || '0x639b0d0bb92940c05fa949b5d91bfdb4c876666ecdf5bf68903225e0a319c566';
-      setDeployedContractAddress(usdcContract);
-      setDeploymentTxHash(usdcTx);
-      setIsSimulated(false);
-    } else {
-      setDeployedContractAddress('');
-      setDeploymentTxHash('');
-      setIsSimulated(false);
+      updateContractState(usdcContract, usdcTx, false);
+    } else if (selectedToken !== 'USDC' && !existing.address && activeTabRef.current === 'interact') {
+      const mockAddr = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      updateContractState(mockAddr, '', true);
+      addLog(`[SIMULATION] No contract deployed yet for ${selectedToken}. Loaded a simulated contract address to play.`);
     }
   }, [selectedToken]);
 
@@ -85,7 +182,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const handleTabChange = (tab: 'deploy' | 'interact') => {
     if (tab === 'interact' && !deployedContractAddress) {
       // Auto pre-populate a mock address and turn on simulation mode so user is never blocked
-      const mockAddr = '0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      const mockAddr = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       setDeployedContractAddress(mockAddr);
       setIsSimulated(true);
       addLog(`[SIMULATION] No contract deployed yet for ${selectedToken}. Loaded a simulated contract address to play.`);
@@ -108,7 +205,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     if (apiKey && walletId && entitySecret) {
       addLog(`Circle API credentials found. Submitting deployment request...`);
       try {
-        const uuid = Array.from({length: 36}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        const uuid = Array.from({ length: 36 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         const response = await fetch('https://api.circle.com/v1/w3s/smart-contracts', {
           method: 'POST',
           headers: {
@@ -199,8 +296,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const runSimulation = () => {
     setIsSimulated(true);
     setTimeout(() => {
-      const mockAddr = '0x' + Array.from({length: 40}, () => Math.floor(Math.random()*16).toString(16)).join('');
-      const mockTx = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+      const mockAddr = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+      const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
       addLog(`[SIMULATION] Contract deployed successfully!`);
       addLog(`[SIMULATION] Address: ${mockAddr}`);
       addLog(`[SIMULATION] Tx Hash: ${mockTx}`);
@@ -215,16 +312,17 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   const fetchOnChainHistory = async () => {
     if (!deployedContractAddress) return;
     if (isSimulated) {
-      setTxHistory([
+      const defaultMocks = [
         {
           id: 'mock-1',
           type: 'deposit',
           action: 'Deposit to Vault',
           address: connectedAccount || '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e',
           amount: depositAmount || '10.0',
-          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
           blockNumber: 1250321,
           timestamp: Date.now() - 3600 * 1000 * 2,
+          isSimulated: true
         },
         {
           id: 'mock-2',
@@ -232,9 +330,10 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           action: 'Withdraw from Vault',
           address: ownerAddress,
           amount: '15.0',
-          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
           blockNumber: 1250210,
           timestamp: Date.now() - 3600 * 1000 * 24,
+          isSimulated: true
         },
         {
           id: 'mock-3',
@@ -243,22 +342,21 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           address: connectedAccount || '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e',
           amount: '50.0',
           tokenSymbol: 'USDC',
-          txHash: '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''),
+          txHash: '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
           blockNumber: 1250150,
           timestamp: Date.now() - 3600 * 1000 * 48,
+          isSimulated: true
         }
-      ]);
+      ];
+      const currentTokenSims = simulatedTransactions.filter(tx => tx.tokenSymbol === selectedToken);
+      setTxHistory([...currentTokenSims, ...defaultMocks]);
       return;
     }
 
     setHistoryLoading(true);
     try {
-      let provider;
-      if (walletProvider) {
-        provider = new BrowserProvider(walletProvider);
-      } else {
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      }
+      // Always use public JsonRpcProvider for read-only event queries to avoid MetaMask network mismatch
+      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
@@ -321,6 +419,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
             txHash: event.transactionHash,
             blockNumber: event.blockNumber,
             timestamp: 0,
+            isSimulated: false
           });
         }
       }
@@ -339,6 +438,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
             txHash: event.transactionHash,
             blockNumber: event.blockNumber,
             timestamp: 0,
+            isSimulated: false
           });
         }
       }
@@ -383,6 +483,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
             txHash: event.transactionHash,
             blockNumber: event.blockNumber,
             timestamp: 0,
+            isSimulated: false
           });
         }
       }
@@ -429,13 +530,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
 
     try {
-      let provider;
-      if (walletProvider) {
-        provider = new BrowserProvider(walletProvider);
-      } else {
-        // Fallback to public JsonRpcProvider for read-only calls
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      }
+      // Always use public JsonRpcProvider for read-only state queries to avoid MetaMask network mismatch or delays
+      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
@@ -445,13 +541,13 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       setVaultOwner(ownerVal);
       setVaultUsdcAddress(usdcVal);
-      
+
       const decimals = TOKEN_CONFIGS[selectedToken].decimals;
       setVaultBalance(formatUnits(balanceVal, decimals));
 
       addLog(`On-chain state updated successfully.`);
       addLog(`Treasury balance: ${formatUnits(balanceVal, decimals)} ${selectedToken}`);
-      
+
       fetchOnChainHistory();
     } catch (err: any) {
       addLog(`Error querying on-chain state: ${err.message || err}`);
@@ -464,32 +560,51 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
   };
 
-  // Automatic refresh on address set
+  // Automatic refresh on address set, tab switch to interact, or token switch
   useEffect(() => {
-    if (deployedContractAddress) {
+    if (deployedContractAddress && activeTab === 'interact') {
       handleRefresh();
     }
-  }, [deployedContractAddress]);
+  }, [deployedContractAddress, activeTab, selectedToken]);
 
   const handleDeposit = async () => {
-    if (!deployedContractAddress || !depositAmount) return;
+    addLog(`[DEBUG] handleDeposit clicked. Token: ${selectedToken}, Contract: ${deployedContractAddress || 'None'}, Amount: ${depositAmount || 'None'}, isSimulated: ${isSimulated}, walletProvider: ${walletProvider ? 'Present' : 'Absent'}`);
+    if (!deployedContractAddress || !depositAmount) {
+      addLog(`[ERROR] Cannot deposit: contract address or amount is empty.`);
+      return;
+    }
     setLoading(true);
     addLog(`Sending request to deposit ${depositAmount} ${selectedToken} into vault...`);
 
     if (isSimulated || !walletProvider) {
       setTimeout(() => {
-        const mockTx = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         setVaultBalance(prev => (parseFloat(prev) + parseFloat(depositAmount)).toString());
         addLog(`[SIMULATION] Deposit successful! Tx Hash: ${mockTx}`);
-        saveTransaction({
+
+        const newSimTx = {
           id: `tx-dep-${Date.now()}`,
+          type: 'deposit',
           action: `Deposit to Vault (Simulated)`,
           amount: depositAmount,
-          from: connectedAccount || '0xUser',
+          address: connectedAccount || '0xUser',
+          txHash: mockTx,
+          blockNumber: 1250322,
+          timestamp: Date.now(),
+          tokenSymbol: selectedToken,
+          isSimulated: true
+        };
+        setSimulatedTransactions(prev => [newSimTx, ...prev]);
+
+        saveTransaction({
+          id: newSimTx.id,
+          action: newSimTx.action,
+          amount: newSimTx.amount,
+          from: newSimTx.address,
           to: deployedContractAddress,
           txHash: mockTx,
           status: 'COMPLETE',
-          timestamp: Date.now(),
+          timestamp: newSimTx.timestamp,
           tokenSymbol: selectedToken
         });
         setLoading(false);
@@ -499,34 +614,48 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
 
     try {
+      if (walletProvider) {
+        await switchOrAddArcNetwork(walletProvider);
+      }
       const provider = new BrowserProvider(walletProvider);
       const signer = await provider.getSigner();
+
+      const treasuryContract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, signer);
       
-      const usdcContract = new Contract(usdcAddress, [
+      // Query the contract directly for the token address it uses to ensure we approve the correct token
+      const tokenAddress = await treasuryContract.usdc();
+
+      const tokenContract = new Contract(tokenAddress, [
         "function approve(address spender, uint256 amount) returns (bool)",
         "function allowance(address owner, address spender) view returns (uint256)"
       ], signer);
-
-      const treasuryContract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, signer);
 
       const decimals = TOKEN_CONFIGS[selectedToken].decimals;
       const amountUnits = parseUnits(depositAmount, decimals);
 
       // Check allowance
-      addLog(`Step 1: Checking and requesting ${selectedToken} approval...`);
-      const approveTx = await usdcContract.approve(deployedContractAddress, amountUnits);
-      addLog(`Approve transaction submitted: ${approveTx.hash}. Waiting for confirmation...`);
-      await approveTx.wait();
-      addLog(`Approval successful!`);
+      const signerAddress = await signer.getAddress();
+      addLog(`Checking allowance...`);
+      const currentAllowance = await tokenContract.allowance(signerAddress, deployedContractAddress);
+
+      if (currentAllowance < amountUnits) {
+        addLog(`Step 1: Requesting ${selectedToken} approval (Current allowance: ${formatUnits(currentAllowance, decimals)})...`);
+        const approveTx = await tokenContract.approve(deployedContractAddress, amountUnits);
+        addLog(`Approve transaction submitted: ${approveTx.hash}. Waiting for confirmation...`);
+        await approveTx.wait();
+        addLog(`Approval successful!`);
+      } else {
+        addLog(`Step 1: Already approved (Allowance: ${formatUnits(currentAllowance, decimals)}). Skipping approval transaction.`);
+      }
 
       // Deposit
       addLog(`Step 2: Calling deposit() on vault contract...`);
       const depositTx = await treasuryContract.deposit(amountUnits);
       addLog(`Deposit transaction submitted: ${depositTx.hash}. Waiting for confirmation...`);
       const receipt = await depositTx.wait();
-      
+
       addLog(`Deposit successful! Confirmed in block ${receipt.blockNumber}`);
-      
+
       saveTransaction({
         id: `tx-dep-${Date.now()}`,
         action: `Deposit to ${selectedToken} Vault`,
@@ -549,24 +678,43 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
   };
 
   const handleWithdraw = async () => {
-    if (!deployedContractAddress) return;
+    addLog(`[DEBUG] handleWithdraw clicked. Token: ${selectedToken}, Contract: ${deployedContractAddress || 'None'}, isSimulated: ${isSimulated}, walletProvider: ${walletProvider ? 'Present' : 'Absent'}`);
+    if (!deployedContractAddress) {
+      addLog(`[ERROR] Cannot withdraw: contract address is empty.`);
+      return;
+    }
     setLoading(true);
     addLog(`Sending withdrawal request...`);
 
     if (isSimulated || !walletProvider) {
       setTimeout(() => {
-        const mockTx = '0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
         setVaultBalance('0');
         addLog(`[SIMULATION] Withdrawal successful! Tx Hash: ${mockTx}`);
-        saveTransaction({
+
+        const newSimTx = {
           id: `tx-wit-${Date.now()}`,
+          type: 'withdraw',
           action: `Withdraw from Vault (Simulated)`,
           amount: vaultBalance,
+          address: ownerAddress,
+          txHash: mockTx,
+          blockNumber: 1250323,
+          timestamp: Date.now(),
+          tokenSymbol: selectedToken,
+          isSimulated: true
+        };
+        setSimulatedTransactions(prev => [newSimTx, ...prev]);
+
+        saveTransaction({
+          id: newSimTx.id,
+          action: newSimTx.action,
+          amount: newSimTx.amount,
           from: deployedContractAddress,
           to: connectedAccount || '0xUser',
           txHash: mockTx,
           status: 'COMPLETE',
-          timestamp: Date.now(),
+          timestamp: newSimTx.timestamp,
           tokenSymbol: selectedToken
         });
         setLoading(false);
@@ -576,6 +724,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
 
     try {
+      if (walletProvider) {
+        await switchOrAddArcNetwork(walletProvider);
+      }
       const provider = new BrowserProvider(walletProvider);
       const signer = await provider.getSigner();
       const treasuryContract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, signer);
@@ -584,7 +735,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
       const withdrawTx = await treasuryContract.withdraw();
       addLog(`Withdrawal transaction submitted: ${withdrawTx.hash}. Waiting for confirmation...`);
       const receipt = await withdrawTx.wait();
-      
+
       addLog(`Successfully withdrew all funds to Owner! [Block: ${receipt.blockNumber}]`);
 
       saveTransaction({
@@ -641,17 +792,14 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
       </div>
 
       <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
-        
+
         {/* Token selection dropdown bar */}
         <div style={{ background: 'rgba(255,255,255,0.01)', padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.9rem', color: '#a1a1aa', fontWeight: 500 }}>Select Asset to Manage:</span>
-          <select 
+          <select
             value={selectedToken}
             onChange={(e) => {
               setSelectedToken(e.target.value as TokenType);
-              // Clear current deployed contract to force redeploy or manual load for the new token
-              setDeployedContractAddress('');
-              setDeploymentTxHash('');
             }}
             className="form-select"
             style={{ width: 'auto', minWidth: '240px', margin: 0, padding: '0.4rem 2rem 0.4rem 0.8rem' }}
@@ -663,14 +811,14 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         </div>
 
         <div className="app-kit-tabs">
-          <button 
+          <button
             className={`app-kit-tab ${activeTab === 'deploy' ? 'active' : ''}`}
             onClick={() => handleTabChange('deploy')}
           >
             <FileCode2 size={16} style={{ display: 'inline', marginRight: '8px', verticalAlign: 'text-bottom' }} />
             1. Compile & Deploy
           </button>
-          <button 
+          <button
             className={`app-kit-tab ${activeTab === 'interact' ? 'active' : ''}`}
             onClick={() => handleTabChange('interact')}
             style={{ cursor: 'pointer', opacity: 1 }}
@@ -683,10 +831,10 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         <div className="app-kit-content" style={{ minHeight: '350px' }}>
           {activeTab === 'deploy' && (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              
+
               {/* Credentials & Settings collapsible drawer */}
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div 
+                <div
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                   onClick={() => setShowSettings(!showSettings)}
                 >
@@ -695,7 +843,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   </h3>
                   <span style={{ color: '#a1a1aa', fontSize: '0.9rem' }}>{showSettings ? 'Hide' : 'Show'}</span>
                 </div>
-                
+
                 {showSettings && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
                     <div className="input-group">
@@ -708,10 +856,10 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                     </div>
                     <div className="input-group">
                       <label className="input-label">Entity Secret Ciphertext</label>
-                      <textarea 
-                        rows={2} 
-                        value={entitySecret} 
-                        onChange={(e) => setEntitySecret(e.target.value)} 
+                      <textarea
+                        rows={2}
+                        value={entitySecret}
+                        onChange={(e) => setEntitySecret(e.target.value)}
                         className="kit-input"
                         placeholder="Paste your encrypted entity secret ciphertext here"
                         style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
@@ -725,9 +873,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                 <div className="input-group">
                   <label className="input-label"><User size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} /> Owner Address (Admin Wallet Address)</label>
-                  <input 
-                    type="text" 
-                    className="kit-input" 
+                  <input
+                    type="text"
+                    className="kit-input"
                     placeholder="0x..."
                     value={ownerAddress}
                     onChange={(e) => setOwnerAddress(e.target.value)}
@@ -735,9 +883,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                 </div>
                 <div className="input-group">
                   <label className="input-label"><Coins size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-top' }} /> {selectedToken} Token Address on Arc</label>
-                  <input 
-                    type="text" 
-                    className="kit-input" 
+                  <input
+                    type="text"
+                    className="kit-input"
                     placeholder="0x..."
                     value={usdcAddress}
                     onChange={(e) => setUsdcAddress(e.target.value)}
@@ -756,7 +904,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                 <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
                   <div>
                     <pre style={{ margin: 0, fontSize: '0.75rem', fontFamily: 'monospace', color: '#a1a1aa', maxHeight: '120px', overflowY: 'auto', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px' }}>
-{`contract MerchantTreasury {
+                      {`contract MerchantTreasury {
     address public immutable owner;
     IERC20 public immutable token; // generic ERC-20 token
 
@@ -784,22 +932,22 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', background: 'rgba(255,255,255,0.01)', padding: '0.75rem', borderRadius: '8px', border: '1px dashed rgba(255,255,255,0.1)' }}>
                 <div className="input-group" style={{ flex: 1 }}>
                   <label className="input-label" style={{ fontSize: '0.75rem' }}>Or load a previously deployed contract address:</label>
-                  <input 
-                    type="text" 
-                    placeholder="0x..." 
-                    value={deployedContractAddress} 
+                  <input
+                    type="text"
+                    placeholder="0x..."
+                    value={deployedContractAddress}
                     onChange={(e) => {
                       setDeployedContractAddress(e.target.value);
                       setIsSimulated(false);
-                    }} 
-                    className="kit-input" 
-                    style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} 
+                    }}
+                    className="kit-input"
+                    style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                   />
                 </div>
                 {deployedContractAddress && (
-                  <button 
-                    onClick={() => setActiveTab('interact')} 
-                    className="kit-action-btn" 
+                  <button
+                    onClick={() => setActiveTab('interact')}
+                    className="kit-action-btn"
                     style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', width: 'auto', marginTop: 0 }}
                   >
                     Manage
@@ -807,8 +955,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                 )}
               </div>
 
-              <button 
-                className="kit-action-btn" 
+              <button
+                className="kit-action-btn"
                 onClick={handleDeploy}
                 disabled={loading || !ownerAddress || !usdcAddress}
                 style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', color: '#fff', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', padding: '0.9rem' }}
@@ -824,7 +972,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
           {activeTab === 'interact' && (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              
+
               {/* Contract Status Banner */}
               <div style={{ padding: '1.2rem', background: isSimulated ? 'rgba(59, 130, 246, 0.08)' : 'rgba(16, 185, 129, 0.08)', border: `1px solid ${isSimulated ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`, borderRadius: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
@@ -835,26 +983,26 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                     </h3>
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    <button 
+                    <button
                       onClick={() => {
                         setIsSimulated(!isSimulated);
                         addLog(`Switched mode to ${!isSimulated ? 'Simulated' : 'Live On-Chain'}`);
                       }}
-                      style={{ 
-                        background: 'rgba(255,255,255,0.05)', 
-                        border: '1px solid rgba(255,255,255,0.1)', 
-                        color: isSimulated ? '#60a5fa' : '#34d399', 
-                        cursor: 'pointer', 
-                        padding: '4px 10px', 
-                        borderRadius: '6px', 
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: isSimulated ? '#60a5fa' : '#34d399',
+                        cursor: 'pointer',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
                         fontSize: '0.8rem',
                         fontWeight: 600
                       }}
                     >
                       Mode: {isSimulated ? 'Simulated 🧪' : 'Live On-Chain 🌐'}
                     </button>
-                    <button 
-                      onClick={handleRefresh} 
+                    <button
+                      onClick={handleRefresh}
                       disabled={isRefreshing}
                       style={{ background: 'transparent', border: 'none', color: '#c084fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}
                     >
@@ -862,7 +1010,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                     </button>
                   </div>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: '#a1a1aa' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Contract Address:</span>
@@ -886,6 +1034,11 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                     <span>Owner (Admin):</span>
                     <span style={{ fontFamily: 'monospace', color: '#fff' }}>{vaultOwner || ownerAddress}</span>
                   </div>
+                  {isSimulated && (
+                    <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.8rem', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd', lineHeight: '1.4' }}>
+                      💡 <strong>Simulation Mode Active:</strong> This contract was simulated in the browser and does not exist on the live blockchain. Real transactions on <a href="https://testnet.arcscan.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>ArcScan Explorer</a> are only generated when <strong>Live On-Chain</strong> mode is enabled with a real contract deployed.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -899,23 +1052,23 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
               {/* Action grid */}
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
-                
+
                 {/* Deposit Form */}
                 <div style={{ background: 'rgba(255,255,255,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)' }}>
                   <h4 style={{ margin: '0 0 1rem', color: '#fff', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Send size={16} color="#c084fc" /> Deposit {selectedToken}
                   </h4>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', width: '100%' }}>
-                    <input 
-                      type="number" 
-                      value={depositAmount} 
-                      onChange={(e) => setDepositAmount(e.target.value)} 
-                      className="kit-input" 
-                      placeholder={`${selectedToken} Amount`} 
+                    <input
+                      type="number"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      className="kit-input"
+                      placeholder={`${selectedToken} Amount`}
                       style={{ flex: 1, minWidth: '150px' }}
                     />
-                    <button 
-                      onClick={handleDeposit} 
+                    <button
+                      onClick={handleDeposit}
                       disabled={loading || !depositAmount}
                       className="kit-action-btn"
                       style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', width: 'auto', whiteSpace: 'nowrap', padding: '0.75rem 1.5rem', marginTop: 0 }}
@@ -933,8 +1086,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   <h4 style={{ margin: '0 0 1rem', color: '#fff', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     🔓 Withdraw Funds
                   </h4>
-                  <button 
-                    onClick={handleWithdraw} 
+                  <button
+                    onClick={handleWithdraw}
                     disabled={loading || parseFloat(vaultBalance) <= 0}
                     className="kit-action-btn"
                     style={{ width: '100%', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', marginTop: 0 }}
@@ -954,8 +1107,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   <h4 style={{ margin: 0, color: '#fff', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Activity size={18} color="#a78bfa" /> On-Chain Treasury Activity
                   </h4>
-                  <button 
-                    onClick={fetchOnChainHistory} 
+                  <button
+                    onClick={fetchOnChainHistory}
                     disabled={historyLoading || isRefreshing}
                     style={{ background: 'transparent', border: 'none', color: '#c084fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.85rem' }}
                   >
@@ -1000,12 +1153,12 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                       }
 
                       return (
-                        <div 
-                          key={tx.id} 
-                          style={{ 
-                            background: bg, 
-                            border: `1px solid ${border}`, 
-                            borderRadius: '10px', 
+                        <div
+                          key={tx.id}
+                          style={{
+                            background: bg,
+                            border: `1px solid ${border}`,
+                            borderRadius: '10px',
                             padding: '0.85rem 1rem',
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -1014,10 +1167,10 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div style={{ 
-                              width: '36px', 
-                              height: '36px', 
-                              borderRadius: '8px', 
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
                               background: iconBg,
                               display: 'flex',
                               alignItems: 'center',
@@ -1042,10 +1195,10 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                             </div>
                             <div style={{ fontSize: '0.75rem', color: '#71717a', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
                               <span>{tx.timestamp ? new Date(tx.timestamp).toLocaleString() : `Block #${tx.blockNumber}`}</span>
-                              {!isSimulated && tx.txHash && (
-                                <a 
-                                  href={`https://testnet.arcscan.app/tx/${tx.txHash}`} 
-                                  target="_blank" 
+                              {!tx.isSimulated && tx.txHash && (
+                                <a
+                                  href={`https://testnet.arcscan.app/tx/${tx.txHash}`}
+                                  target="_blank"
                                   rel="noopener noreferrer"
                                   style={{ color: '#c084fc', display: 'inline-flex', alignItems: 'center' }}
                                 >
@@ -1064,8 +1217,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               {/* Circle API status checking for real deploy */}
               {!isSimulated && circleDeploymentId && (
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button 
-                    onClick={handleCheckCircleStatus} 
+                  <button
+                    onClick={handleCheckCircleStatus}
                     className="kit-action-btn"
                     style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
                   >
