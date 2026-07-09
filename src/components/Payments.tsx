@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Zap, Fuel, ExternalLink, CheckCircle2, AlertCircle, QrCode, X } from 'lucide-react';
-import { BrowserProvider, parseUnits } from 'ethers';
+import { BrowserProvider, parseUnits, Contract } from 'ethers';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { saveTransaction } from '../lib/TransactionHistory';
 
@@ -9,9 +9,55 @@ interface PaymentsProps {
   address: string;
 }
 
+const TOKEN_CONFIGS = {
+  USDC: {
+    symbol: 'USDC',
+    address: '0x0000000000000000000000000000000000000000',
+    decimals: 18,
+    isNative: true,
+  },
+  EURC: {
+    symbol: 'EURC',
+    address: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
+    decimals: 6,
+    isNative: false,
+  },
+  cirBTC: {
+    symbol: 'cirBTC',
+    address: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF',
+    decimals: 8,
+    isNative: false,
+  }
+};
+
+const getFriendlyErrorMessage = (err: any, token: string): string => {
+  const errMsg = err.message || '';
+  
+  if (errMsg.includes('4001') || errMsg.toLowerCase().includes('user rejected') || errMsg.toLowerCase().includes('user denied')) {
+    return 'Transaction cancelled. You rejected the transaction in MetaMask.';
+  }
+  
+  if (errMsg.toLowerCase().includes('transfer amount exceeds balance') || errMsg.toLowerCase().includes('exceeds balance')) {
+    return `Insufficient ${token} balance. You do not have enough ${token} in your wallet to complete this transfer.`;
+  }
+  
+  if (errMsg.toLowerCase().includes('insufficient funds') || errMsg.toLowerCase().includes('insufficient_funds')) {
+    return `Insufficient USDC gas. Ensure you have enough native USDC in your wallet to cover the transaction value and network fees.`;
+  }
+  
+  if (err.reason) {
+    return `Transaction reverted: ${err.reason}`;
+  }
+  
+  return errMsg || `Payment failed. Please ensure you have enough ${token} and native USDC gas, and the recipient address is valid.`;
+};
+
+type TokenSymbol = 'USDC' | 'EURC' | 'cirBTC';
+
 export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) => {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [selectedToken, setSelectedToken] = useState<TokenSymbol>('USDC');
   const [isSending, setIsSending] = useState(false);
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
@@ -43,19 +89,55 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
       setError('');
       setTxHash('');
 
+      // Ensure user is on Arc Testnet (same pattern as TransactionMemos)
+      const ARC_CHAIN_ID = '0x4CEF52';
+      try {
+        await walletProvider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: ARC_CHAIN_ID }],
+        });
+      } catch (switchErr: any) {
+        if (switchErr.code === 4902) {
+          await walletProvider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: ARC_CHAIN_ID,
+              chainName: 'Arc Testnet',
+              nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
+              rpcUrls: ['https://rpc.testnet.arc.network'],
+              blockExplorerUrls: ['https://testnet.arcscan.app'],
+            }],
+          });
+        } else if (switchErr.code !== 4001) {
+          throw switchErr;
+        }
+      }
+
       // We use BrowserProvider to wrap the EIP-1193 provider
       const provider = new BrowserProvider(walletProvider);
       const signer = await provider.getSigner();
 
-      // Convert amount to wei (USDC uses 18 decimals on Arc Testnet as native gas)
-      // Note: If it's literally native gas, it's 18 decimals.
-      const valueInWei = parseUnits(amount, 18);
+      const tokenConfig = TOKEN_CONFIGS[selectedToken];
+      const valueInDecimals = parseUnits(amount, tokenConfig.decimals);
 
-      // We are transferring native USDC gas on Arc testnet
-      const tx = await signer.sendTransaction({
-        to: recipient,
-        value: valueInWei
-      });
+      let tx;
+      if (tokenConfig.isNative) {
+        // We are transferring native USDC gas on Arc testnet
+        // Hardcode gasLimit for simple value transfers to bypass estimateGas issues on custom gas networks
+        tx = await signer.sendTransaction({
+          to: recipient,
+          value: valueInDecimals,
+          gasLimit: 21000
+        });
+      } else {
+        // We are transferring an ERC-20 token (EURC or cirBTC)
+        const erc20Contract = new Contract(
+          tokenConfig.address,
+          ["function transfer(address to, uint256 value) returns (bool)"],
+          signer
+        );
+        tx = await erc20Contract.transfer(recipient, valueInDecimals);
+      }
 
       // Wait for confirmation to demonstrate sub-second finality
       const receipt = await tx.wait();
@@ -73,12 +155,12 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
           status: 'COMPLETE',
           explorerUrl: `https://testnet.arcscan.app/tx/${receipt.hash}`,
           timestamp: Date.now(),
-          tokenSymbol: 'USDC'
+          tokenSymbol: selectedToken
         });
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Payment failed. Ensure you have enough USDC gas.');
+      setError(getFriendlyErrorMessage(err, selectedToken));
       
       saveTransaction({
         id: `tx-${Date.now()}`,
@@ -89,12 +171,15 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
         txHash: '',
         status: 'FAILED',
         timestamp: Date.now(),
-        tokenSymbol: 'USDC'
+        tokenSymbol: selectedToken
       });
     } finally {
       setIsSending(false);
     }
   };
+
+  const stepValue = selectedToken === 'cirBTC' ? '0.00000001' : '0.000001';
+  const placeholderValue = selectedToken === 'cirBTC' ? '0.00000000' : '0.00';
 
   return (
     <div className="payments-container">
@@ -105,7 +190,7 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
           </div>
           <div className="payments-title-group">
             <h2 className="payments-title">P2P Payments</h2>
-            <p className="payments-subtitle">Send USDC instantly on Arc Network</p>
+            <p className="payments-subtitle">Send USDC, EURC, or cirBTC instantly on Arc Network</p>
           </div>
         </div>
 
@@ -118,7 +203,7 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
             <div className="receipt-details">
               <div className="receipt-row">
                 <span>Amount</span>
-                <span className="font-semibold">{amount} USDC</span>
+                <span className="font-semibold">{amount} {selectedToken}</span>
               </div>
               <div className="receipt-row">
                 <span>To</span>
@@ -174,18 +259,26 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
             </div>
             
             <div className="input-group">
-              <label>Amount (USDC)</label>
+              <label>Amount ({selectedToken})</label>
               <div className="amount-input-wrapper">
                 <input
                   type="number"
-                  step="0.000001"
+                  step={stepValue}
                   min="0"
-                  placeholder="0.00"
+                  placeholder={placeholderValue}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="arc-input amount-input"
+                  className="amount-input"
                 />
-                <div className="currency-badge">USDC</div>
+                <select
+                  value={selectedToken}
+                  onChange={(e) => setSelectedToken(e.target.value as TokenSymbol)}
+                  className="currency-select-dropdown"
+                >
+                  <option value="USDC">USDC</option>
+                  <option value="EURC">EURC</option>
+                  <option value="cirBTC">cirBTC</option>
+                </select>
               </div>
             </div>
 
@@ -254,3 +347,4 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
     </div>
   );
 };
+

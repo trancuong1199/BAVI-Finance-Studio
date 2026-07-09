@@ -13,6 +13,7 @@ export const NetworkStats: React.FC<NetworkStatsProps> = ({ connectedAccount }) 
   });
 
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [totalSwapsCount, setTotalSwapsCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -20,6 +21,7 @@ export const NetworkStats: React.FC<NetworkStatsProps> = ({ connectedAccount }) 
   useEffect(() => {
     if (!connectedAccount) {
       setTransactions([]);
+      setTotalSwapsCount(null);
       return;
     }
 
@@ -29,6 +31,26 @@ export const NetworkStats: React.FC<NetworkStatsProps> = ({ connectedAccount }) 
         const { getTransactionHistory } = await import('../lib/TransactionHistory');
         const history = getTransactionHistory();
         const localUserTxs = history.filter(tx => tx.from.toLowerCase() === connectedAccount.toLowerCase() || tx.to.toLowerCase() === connectedAccount.toLowerCase());
+
+        // Dynamic Total Swaps Calculation
+        let totalCount = localUserTxs.length;
+        try {
+          const res = await fetch(`https://testnet.arcscan.app/api?module=account&action=txlist&address=${connectedAccount}`);
+          const data = await res.json();
+          if (data && data.result && Array.isArray(data.result)) {
+            const localHashes = new Set(localUserTxs.map(tx => tx.txHash?.toLowerCase()).filter(Boolean));
+            let uniqueArcscanCount = 0;
+            for (const tx of data.result) {
+              if (tx.hash && !localHashes.has(tx.hash.toLowerCase())) {
+                uniqueArcscanCount++;
+              }
+            }
+            totalCount += uniqueArcscanCount;
+          }
+        } catch (e) {
+          console.warn('Arcscan count fetch failed', e);
+        }
+        setTotalSwapsCount(totalCount);
 
         let arcscanTxs: any[] = [];
         try {
@@ -101,7 +123,11 @@ export const NetworkStats: React.FC<NetworkStatsProps> = ({ connectedAccount }) 
         </div>
         <div className="stat-card glass-panel">
           <div className="stat-title"><Activity size={16} /> Total Swaps</div>
-          <div className="stat-value">{stats.totalSwaps}</div>
+          <div className="stat-value">
+            {connectedAccount 
+              ? (totalSwapsCount !== null ? totalSwapsCount.toLocaleString() : 'Loading...') 
+              : stats.totalSwaps}
+          </div>
         </div>
       </div>
 

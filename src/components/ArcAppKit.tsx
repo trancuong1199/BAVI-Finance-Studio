@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { ArrowUpDown, RefreshCw } from 'lucide-react';
 import { AgenticJobs } from './AgenticJobs';
 import { CircleIntegration } from './CircleIntegration';
-import { BridgeKit } from '@circle-fin/bridge-kit';
-import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
 import { saveTransaction } from '../lib/TransactionHistory';
 import { JsonRpcProvider, Contract, formatUnits, Interface } from 'ethers';
 
@@ -65,11 +63,10 @@ interface ArcAppKitProps {
 }
 
 export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvider }) => {
-  const [activeTab, setActiveTab] = useState<'swap' | 'bridge' | 'jobs' | 'circle'>('swap');
+  const [activeTab, setActiveTab] = useState<'swap' | 'jobs' | 'circle'>('swap');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [swapAmount, setSwapAmount] = useState('1.00');
-  const [recipient, setRecipient] = useState('');
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [isReversed, setIsReversed] = useState(false);
 
@@ -185,7 +182,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
 
       // Check if this is a Swap or a Bridge action
       if (activeTab === 'swap') {
-        const finalRecipient = recipient.trim() || from;
+        const finalRecipient = from;
 
         // --- LIVE WALLET SWAP LOGIC ---
         const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
@@ -385,88 +382,6 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
 
         // Refresh balances
         fetchBalances();
-
-      } else if (activeTab === 'bridge') {
-        // --- CCTP BRIDGE LOGIC ---
-        setStatusMsg('🔄 Initializing Bridge Kit...');
-        const kit = new BridgeKit();
-
-        // Ensure viem adapter connects to user's injected provider (EIP-1193)
-        const adapter = await createViemAdapterFromProvider({ provider: eth });
-
-        const finalRecipient = recipient.trim() || from;
-
-        setStatusMsg('📤 Estimating & Preparing Bridge Transaction...');
-        // Bridge Kit expects amount in decimal format (e.g. "1.50")
-        const amountString = Number(swapAmount).toFixed(2);
-
-        // Execute bridge transfer with automatic forwarding
-        // Note: from chain is Arc_Testnet, to chain is Ethereum_Sepolia (default destination in this UI)
-        try {
-          const resultObj = await kit.bridge({
-            from: {
-              adapter,
-              chain: 'Arc_Testnet'
-            },
-            to: {
-              adapter,
-              chain: 'Ethereum_Sepolia',
-              recipientAddress: finalRecipient,
-              useForwarder: true // Enable Circle Forwarding Service for automatic attestation and minting
-            },
-            amount: amountString,
-            config: {
-              transferSpeed: 'FAST'
-            }
-          });
-
-          setStatusMsg('✅ Bridge Transaction executed successfully!');
-
-          let txHash = '';
-          if (resultObj.steps && Array.isArray(resultObj.steps)) {
-            const burnStep = resultObj.steps.find((s: any) => s.name === 'burn');
-            if (burnStep?.txHash) {
-              txHash = burnStep.txHash;
-            }
-          }
-
-          const bridgeResult = {
-            status: resultObj.state === 'success' ? 'COMPLETE' : 'PENDING',
-            action: 'Bridge (CCTP)',
-            transactionHash: txHash,
-            from,
-            to: finalRecipient,
-            value: `${swapAmount} USDC`,
-            explorerUrl: `https://testnet.arcscan.app/tx/${txHash}`,
-            bridgeDetails: resultObj
-          };
-
-          setResult(JSON.stringify(bridgeResult, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
-
-          // Save to history
-          saveTransaction({
-            id: `tx-${Date.now()}`,
-            action: 'Bridge (CCTP)',
-            amount: swapAmount,
-            from,
-            to: finalRecipient,
-            txHash,
-            status: resultObj.state === 'success' ? 'COMPLETE' : 'PENDING',
-            explorerUrl: bridgeResult.explorerUrl,
-            timestamp: Date.now(),
-            tokenSymbol: 'USDC'
-          });
-
-        } catch (bridgeErr: any) {
-          console.error("Bridge Kit error:", bridgeErr);
-
-          let errorReason = bridgeErr.message;
-          if (bridgeErr.code === 9002 || bridgeErr.type === 'BALANCE') {
-            errorReason = "Insufficient native gas token (USDC) on Arc Testnet.";
-          }
-
-          throw new Error(errorReason);
-        }
       }
 
       // Notify other components
@@ -488,12 +403,6 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
           onClick={() => setActiveTab('swap')}
         >
           Swap natively
-        </button>
-        <button
-          className={`app-kit-tab ${activeTab === 'bridge' ? 'active' : ''}`}
-          onClick={() => setActiveTab('bridge')}
-        >
-          Bridge (CCTP)
         </button>
         <button
           className={`app-kit-tab ${activeTab === 'jobs' ? 'active' : ''}`}
@@ -715,19 +624,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               </div>
             )}
 
-            {/* Recipient Address (only for Bridge) */}
-            {activeTab === 'bridge' && (
-              <div className="input-group" style={{ marginTop: '0.5rem' }}>
-                <label className="input-label">Recipient Address (Optional)</label>
-                <input
-                  type="text"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="0x... (Leave empty to send to yourself)"
-                  className="kit-input"
-                />
-              </div>
-            )}
+
 
             {statusMsg && (
               <div className="status-message" style={{ whiteSpace: 'pre-line' }}>{statusMsg}</div>
@@ -741,9 +638,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               {isProcessing
                 ? 'Processing...'
                 : connectedAccount
-                  ? (activeTab === 'swap'
-                      ? 'Execute Swap on Arc'
-                      : 'Execute Bridge')
+                  ? 'Execute Swap on Arc'
                   : 'Connect Wallet First'}
             </button>
 

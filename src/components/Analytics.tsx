@@ -1,394 +1,302 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, ChevronDown, MoreHorizontal, Check } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Wallet, ArrowUpRight, ArrowDownLeft, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
 
-const formatNumber = (num: number | string | null | undefined): string => {
-  if (num === null || num === undefined) return '0';
-  const n = typeof num === 'string' ? parseFloat(num) : num;
-  if (isNaN(n)) return '0';
-  if (n >= 1e9) return (n / 1e9).toFixed(3) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(3) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(3) + 'K';
-  return n.toLocaleString();
+const ARC_API = 'https://testnet.arcscan.app/api/v2';
+
+const shortenAddress = (addr: string) =>
+  addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '—';
+
+const formatTs = (ts: string) => {
+  const d = new Date(ts);
+  return d.toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-const formatSeconds = (ms: number | string | null | undefined): string => {
-  if (ms === null || ms === undefined) return '0s';
-  const n = typeof ms === 'string' ? parseFloat(ms) : ms;
-  if (isNaN(n)) return '0s';
-  return (n / 1000).toFixed(3) + 's';
-};
+const TOKEN_COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#f59e0b', '#f87171', '#38bdf8'];
 
-// Generate realistic mock data for charts since some Blockscout APIs are unavailable
-const generateMockData = (days: number, baseValue: number, volatility: number) => {
-  const data = [];
-  let currentValue = baseValue;
-  const now = new Date();
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    const month = date.toLocaleString('default', { month: 'short' });
-    const year = date.getFullYear().toString().slice(2);
-    
-    // Add some random walk volatility
-    const change = (Math.random() - 0.5) * volatility;
-    currentValue = Math.max(0, currentValue + change);
-    
-    data.push({
-      date: `${month} '${year}`, // Format like Jan '26
-      rawDate: date.toISOString(),
-      value: Math.floor(currentValue)
-    });
-  }
-  return data;
-};
+interface AnalyticsProps {
+  address: string | null;
+}
 
-// Generate 365 days of mock data for various metrics
-const mockAccountsData = generateMockData(365, 250000, 15000);
-const mockActiveAccountsData = generateMockData(365, 50000, 5000);
-const mockNewAccountsData = generateMockData(365, 2000, 800);
+interface WalletTx {
+  hash: string;
+  timestamp: string;
+  from: { hash: string };
+  to: { hash: string } | null;
+  value: string;
+  status: string;
+  method: string | null;
+  fee: { value: string };
+  gas_used: string;
+}
 
-const mockAvgTxFeeData = generateMockData(365, 0.02, 0.005);
-const mockNewTxData = generateMockData(365, 1000000, 200000);
-const mockTxFeesData = generateMockData(365, 3000, 500);
-const mockTxSuccessData = generateMockData(365, 0.98, 0.01).map(d => ({ ...d, value: Math.min(1, d.value) }));
+interface TokenBalance {
+  token: {
+    symbol: string;
+    name: string;
+    decimals: string;
+    icon_url: string | null;
+  };
+  value: string;
+}
 
-const mockBlockSizeData = generateMockData(365, 50000, 5000);
-const mockBlockTimeData = generateMockData(365, 0.51, 0.02).map(d => ({ ...d, value: Math.max(0.45, d.value) }));
+export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
+  const [walletTxs, setWalletTxs] = useState<WalletTx[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [nativeBalance, setNativeBalance] = useState<string>('0');
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState('');
+  const [totalGasSpent, setTotalGasSpent] = useState(0);
+  const [successCount, setSuccessCount] = useState(0);
+  const [failCount, setFailCount] = useState(0);
 
-const mockTokenTransfersData = generateMockData(365, 120000, 15000);
+  const fetchWalletData = async () => {
+    if (!address) return;
+    setWalletLoading(true);
+    setWalletError('');
+    try {
+      const [addrRes, txRes, tokRes] = await Promise.all([
+        fetch(`${ARC_API}/addresses/${address}`),
+        fetch(`${ARC_API}/addresses/${address}/transactions`),
+        fetch(`${ARC_API}/addresses/${address}/tokens`)
+      ]);
 
-const mockGasUsedData = generateMockData(365, 400000000, 20000000);
-const mockGasPriceData = generateMockData(365, 20, 2);
-
-const mockNewContractsData = generateMockData(365, 50, 10);
-const mockVerifiedContractsData = generateMockData(365, 10, 3);
-
-const mockUserOpsData = generateMockData(365, 5000, 500);
-
-
-export const Analytics: React.FC = () => {
-  const [stats, setStats] = useState<any>(null);
-  const [rawTxChartData, setRawTxChartData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Filtering states
-  const [timeRange, setTimeRange] = useState<'All time' | '1M' | '3M' | '6M' | '1Y'>('All time');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('All stats');
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const categories = ['All stats', 'Accounts', 'Transactions', 'Blocks', 'Tokens', 'Gas', 'Contracts', 'User operations'];
-
-  useEffect(() => {
-    // Close dropdown on outside click
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
+      if (addrRes.ok) {
+        const d = await addrRes.json();
+        setNativeBalance(d.coin_balance || '0');
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [statsRes, chartsRes] = await Promise.all([
-          fetch('https://testnet.arcscan.app/api/v2/stats'),
-          fetch('https://testnet.arcscan.app/api/v2/stats/charts/transactions')
-        ]);
-        
-        if (statsRes.ok) {
-          const data = await statsRes.json();
-          setStats(data);
+      if (txRes.ok) {
+        const d = await txRes.json();
+        const items: WalletTx[] = d.items || [];
+        setWalletTxs(items);
+
+        let gas = 0, ok = 0, fail = 0;
+        for (const tx of items) {
+          gas += parseFloat(tx.fee?.value || '0') / 1e18;
+          if (tx.status === 'ok') ok++;
+          else fail++;
         }
-        
-        if (chartsRes.ok) {
-          const data = await chartsRes.json();
-          if (data.chart_data && Array.isArray(data.chart_data)) {
-            const formatted = data.chart_data.map((item: any) => {
-              const dateObj = new Date(item.date);
-              const month = dateObj.toLocaleString('default', { month: 'short' });
-              const year = dateObj.getFullYear().toString().slice(2);
-              return {
-                date: `${month} '${year}`,
-                rawDate: item.date,
-                value: item.transactions_count
-              };
-            }).reverse();
-            setRawTxChartData(formatted);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-      } finally {
-        setLoading(false);
+        setTotalGasSpent(gas);
+        setSuccessCount(ok);
+        setFailCount(fail);
       }
-    };
 
-    fetchStats();
-  }, []);
-
-  // Filter data based on selected time range
-  const filterData = (data: any[], range: string) => {
-    if (!data || data.length === 0) return [];
-    let daysToKeep = data.length; // Default to all
-    
-    switch (range) {
-      case '1M': daysToKeep = 30; break;
-      case '3M': daysToKeep = 90; break;
-      case '6M': daysToKeep = 180; break;
-      case '1Y': daysToKeep = 365; break;
-      case 'All time': default: daysToKeep = data.length; break;
+      if (tokRes.ok) {
+        const d = await tokRes.json();
+        setTokenBalances(d.items || []);
+      }
+    } catch {
+      setWalletError('Failed to fetch wallet data. Please check your connection.');
+    } finally {
+      setWalletLoading(false);
     }
-    
-    return data.slice(Math.max(data.length - daysToKeep, 0));
   };
 
-  const txChartData = useMemo(() => filterData(rawTxChartData, timeRange), [rawTxChartData, timeRange]);
-  const filteredAccountsData = useMemo(() => filterData(mockAccountsData, timeRange), [timeRange]);
-  const filteredActiveAccountsData = useMemo(() => filterData(mockActiveAccountsData, timeRange), [timeRange]);
-  const filteredNewAccountsData = useMemo(() => filterData(mockNewAccountsData, timeRange), [timeRange]);
-  
-  const filteredAvgTxFeeData = useMemo(() => filterData(mockAvgTxFeeData, timeRange), [timeRange]);
-  const filteredNewTxData = useMemo(() => filterData(mockNewTxData, timeRange), [timeRange]);
-  const filteredTxFeesData = useMemo(() => filterData(mockTxFeesData, timeRange), [timeRange]);
-  const filteredTxSuccessData = useMemo(() => filterData(mockTxSuccessData, timeRange), [timeRange]);
+  useEffect(() => { fetchWalletData(); }, [address]);
 
-  const filteredBlockSizeData = useMemo(() => filterData(mockBlockSizeData, timeRange), [timeRange]);
-  const filteredBlockTimeData = useMemo(() => filterData(mockBlockTimeData, timeRange), [timeRange]);
-  
-  const filteredTokenTransfersData = useMemo(() => filterData(mockTokenTransfersData, timeRange), [timeRange]);
-  
-  const filteredGasUsedData = useMemo(() => filterData(mockGasUsedData, timeRange), [timeRange]);
-  const filteredGasPriceData = useMemo(() => filterData(mockGasPriceData, timeRange), [timeRange]);
-  
-  const filteredNewContractsData = useMemo(() => filterData(mockNewContractsData, timeRange), [timeRange]);
-  const filteredVerifiedContractsData = useMemo(() => filterData(mockVerifiedContractsData, timeRange), [timeRange]);
-  
-  const filteredUserOpsData = useMemo(() => filterData(mockUserOpsData, timeRange), [timeRange]);
+  // Volume chart — aggregate value sent per day
+  const volumeChartData = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const tx of walletTxs) {
+      const d = new Date(tx.timestamp);
+      const key = `${d.getDate()}/${d.getMonth() + 1}`;
+      const val = parseFloat(tx.value || '0') / 1e18;
+      map[key] = (map[key] || 0) + val;
+    }
+    return Object.entries(map)
+      .map(([date, value]) => ({ date, value: parseFloat(value.toFixed(4)) }))
+      .reverse();
+  }, [walletTxs]);
+
+  // Pie chart — top tokens with meaningful balance only
+  const pieData = useMemo(() => {
+    const result: { name: string; value: number }[] = [];
+    const native = parseFloat(nativeBalance) / 1e18;
+    if (native >= 0.0001) result.push({ name: 'USDC (Native)', value: parseFloat(native.toFixed(4)) });
+    for (const t of tokenBalances) {
+      const decimals = parseInt(t.token.decimals || '18');
+      const val = parseFloat(t.value || '0') / Math.pow(10, decimals);
+      if (val >= 0.0001) result.push({ name: t.token.symbol, value: parseFloat(val.toFixed(6)) });
+    }
+    return result.sort((a, b) => b.value - a.value).slice(0, 8);
+  }, [nativeBalance, tokenBalances]);
 
   return (
     <div className="page-container animate-fade-in" style={{ maxWidth: '100%', paddingBottom: '4rem' }}>
-      <h2 style={{ fontSize: '2rem', fontWeight: 'bold', margin: '0 0 1.75rem 0' }}>Arc Testnet stats</h2>
 
-      {/* Grid of Stats Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', 
-        gap: '1rem',
-        marginBottom: '2.5rem'
-      }}>
-        <StatCard title="Average block time" value={formatSeconds(stats?.average_block_time || 515)} />
-        <StatCard title="Completed txns" value={formatNumber(457216000)} />
-        <StatCard title="Number of contracts today" value="0" />
-        <StatCard title="Number of verified contracts today" value="41" />
-        
-        <StatCard title="Total accounts" value={formatNumber(2543000)} />
-        <StatCard title="Total addresses" value={formatNumber(stats?.total_addresses || 33028000)} />
-        <StatCard title="Total blocks" value={formatNumber(stats?.total_blocks || 45059000)} />
-        <StatCard title="Total contracts" value={formatNumber(29010000)} />
-        
-        <StatCard title="Total USDC transfers" value={formatNumber(18817000)} />
-        <StatCard title="Total tokens" value={formatNumber(6678000)} />
-        <StatCard title="Total Txns" value={formatNumber(stats?.total_transactions || 473151000)} />
-        <StatCard title="Total user operations" value={formatNumber(1471000)} />
-        
-        <StatCard title="Total AA wallets" value={formatNumber(36888)} />
-        <StatCard title="Total verified contracts" value={formatNumber(1423000)} />
-        <StatCard title="Transactions (24h)" value={formatNumber(stats?.transactions_today || 3656000)} />
-        <StatCard title="Pending transactions (30m)" value="0" />
-        
-        <StatCard title="Transactions fees (24h)" value="9.975K USDC" />
-        <StatCard title="Avg. transaction fee (24h)" value="0.003 USDC" />
-      </div>
-
-      {/* Filters Toolbar */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '1rem', 
-        flexWrap: 'wrap', 
-        alignItems: 'center', 
-        marginBottom: '2rem',
-        position: 'relative'
-      }}>
-        
-        {/* Dropdown Menu */}
-        <div ref={dropdownRef} style={{ position: 'relative' }}>
-          <button 
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            style={{ 
-              background: isDropdownOpen ? '#27272a' : 'transparent', 
-              border: '1px solid rgba(255,255,255,0.1)', 
-              color: '#fff', 
-              padding: '8px 16px', 
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              minWidth: '140px',
-              justifyContent: 'space-between'
-            }}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ background: 'linear-gradient(135deg,#3b82f6,#8b5cf6)', borderRadius: '12px', padding: '10px', display: 'flex' }}>
+            <Wallet size={20} color="white" />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700 }}>Wallet Analytics</h2>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#a1a1aa' }}>
+              {address ? shortenAddress(address) : 'Connect your wallet to see live data'}
+            </p>
+          </div>
+        </div>
+        {address && (
+          <button
+            onClick={fetchWalletData}
+            disabled={walletLoading}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '8px 14px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: '10px', color: '#60a5fa', cursor: 'pointer', fontSize: '0.875rem', fontWeight: 600 }}
           >
-            {selectedCategory} <ChevronDown size={14} />
+            <RefreshCw size={14} style={{ animation: walletLoading ? 'spin 1s linear infinite' : 'none' }} />
+            Refresh
           </button>
-          
-          {isDropdownOpen && (
-            <div style={{ 
-              position: 'absolute', 
-              top: '100%', 
-              left: 0, 
-              marginTop: '4px',
-              background: '#18181b', 
-              border: '1px solid #27272a', 
-              borderRadius: '8px',
-              width: '200px',
-              zIndex: 50,
-              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
-            }}>
-              {categories.map(cat => (
-                <div 
-                  key={cat}
-                  onClick={() => { setSelectedCategory(cat); setIsDropdownOpen(false); }}
-                  style={{ 
-                    padding: '10px 16px', 
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: selectedCategory === cat ? 'rgba(255,255,255,0.05)' : 'transparent',
-                    color: selectedCategory === cat ? '#fff' : '#a1a1aa'
-                  }}
-                  className="filter-dropdown-item"
-                >
-                  {cat}
-                  {selectedCategory === cat && <Check size={14} color="#60a5fa" />}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        
-        {/* Time Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#a1a1aa', fontSize: '0.9rem', background: 'rgba(255,255,255,0.02)', padding: '4px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-          {['All time', '1M', '3M', '6M', '1Y'].map(range => (
-            <button 
-              key={range}
-              onClick={() => setTimeRange(range as any)}
-              style={{ 
-                background: timeRange === range ? '#3b82f6' : 'transparent', 
-                color: timeRange === range ? '#fff' : '#a1a1aa', 
-                border: 'none', 
-                padding: '6px 12px', 
-                borderRadius: '4px', 
-                cursor: 'pointer',
-                fontWeight: timeRange === range ? '600' : 'normal'
-              }}
-              className={`time-filter-btn ${timeRange === range ? 'active' : ''}`}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
-          <Search size={16} color="#71717a" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-          <input 
-            type="text" 
-            placeholder="Find chart, metric..." 
-            style={{ 
-              width: '100%', 
-              background: 'transparent', 
-              border: '1px solid rgba(255,255,255,0.1)', 
-              color: '#fff', 
-              padding: '8px 12px 8px 36px', 
-              borderRadius: '24px',
-              outline: 'none'
-            }} 
-            className="focus:border-blue-500 focus:bg-white/5 transition-colors"
-          />
-        </div>
+        )}
       </div>
 
-      {/* Accounts Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Accounts') && (
+      {!address ? (
+        <div style={{ padding: '3rem', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '16px', textAlign: 'center', color: '#71717a' }}>
+          <Wallet size={40} style={{ margin: '0 auto 1rem', display: 'block', opacity: 0.4 }} />
+          <p style={{ margin: 0, fontSize: '1rem' }}>Connect your wallet to view personalized transaction analytics</p>
+        </div>
+      ) : walletError ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', color: '#fca5a5' }}>
+          <AlertCircle size={16} />
+          <span>{walletError}</span>
+        </div>
+      ) : (
         <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Accounts</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '1.25rem' }}>
-            <ChartCard title="Number of accounts" subtitle="Cumulative account growth over time" data={filteredAccountsData} unit="Accounts" />
-            <ChartCard title="Active accounts" subtitle="Active accounts number per period" data={filteredActiveAccountsData} unit="Active Accounts" />
-            <ChartCard title="New accounts" subtitle="Number of newly added accounts" data={filteredNewAccountsData} unit="New Accounts" />
+          {/* KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <WalletStatCard label="USDC Balance (Native)" value={`${(parseFloat(nativeBalance) / 1e18).toFixed(4)} USDC`} loading={walletLoading} color="#60a5fa" />
+            <WalletStatCard label="Total Transactions" value={walletTxs.length.toString() + (walletTxs.length === 50 ? '+' : '')} loading={walletLoading} color="#a78bfa" />
+            <WalletStatCard label="Success / Failed" value={`${successCount} / ${failCount}`} loading={walletLoading} color="#34d399" />
+            <WalletStatCard label="Gas Spent (recent 50)" value={`${totalGasSpent.toFixed(6)} USDC`} loading={walletLoading} color="#f59e0b" />
+            <WalletStatCard label="Token Holdings" value={tokenBalances.length.toString()} loading={walletLoading} color="#38bdf8" />
           </div>
-        </>
-      )}
 
-      {/* Transactions Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Transactions') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Transactions</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="Number of transactions" subtitle="Cumulative transaction growth over time" data={txChartData} unit="Transactions" loading={loading} />
-            <ChartCard title="Average transaction fee" subtitle="Average amount of USDC spent on gas fees per transaction" data={filteredAvgTxFeeData} unit="USDC" />
-            <ChartCard title="New transactions" subtitle="Number of new transactions" data={filteredNewTxData} unit="Transactions" />
-            <ChartCard title="Transaction fees" subtitle="Sum of USDC spent on gas fees" data={filteredTxFeesData} unit="USDC" />
-            <ChartCard title="Transaction success rate" subtitle="Success rate for all included transactions" data={filteredTxSuccessData} unit="Rate" formatter={(val: number) => val.toFixed(2)} />
+          {/* Charts Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+
+            {/* Volume Chart */}
+            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', padding: '1.5rem' }}>
+              <h4 style={{ margin: '0 0 1rem', color: '#60a5fa', fontSize: '1rem' }}>Transaction Volume (USDC sent)</h4>
+              {walletLoading ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>Loading...</div>
+              ) : volumeChartData.length === 0 ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>No transactions found</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={volumeChartData}>
+                    <defs>
+                      <linearGradient id="walletVol" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 11 }} minTickGap={20} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 11 }} width={60} tickFormatter={v => v.toFixed(2)} />
+                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} labelStyle={{ color: '#a1a1aa' }} itemStyle={{ color: '#60a5fa' }} formatter={(v: any) => [`${v} USDC`, 'Volume']} />
+                    <Area type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={2} fillOpacity={1} fill="url(#walletVol)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Token Pie */}
+            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', padding: '1.5rem' }}>
+              <h4 style={{ margin: '0 0 1rem', color: '#a78bfa', fontSize: '1rem' }}>Token Portfolio Distribution</h4>
+              {walletLoading ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>Loading...</div>
+              ) : pieData.length === 0 ? (
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>No token holdings</div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: 220 }}>
+                  <ResponsiveContainer width="55%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={3}>
+                        {pieData.map((_, i) => <Cell key={i} fill={TOKEN_COLORS[i % TOKEN_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} formatter={(v: any, n: any) => [v, n]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, overflowY: 'auto', maxHeight: 220 }}>
+                    {pieData.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', minWidth: 0 }}>
+                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: TOKEN_COLORS[i % TOKEN_COLORS.length], flexShrink: 0 }} />
+                        <span style={{ color: '#e4e4e7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.name}</span>
+                        <span style={{ color: '#a1a1aa', flexShrink: 0, fontFamily: 'monospace', fontSize: '0.75rem' }}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </>
-      )}
 
-      {/* Blocks Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Blocks') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Blocks</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="Block size" subtitle="Average block size in bytes" data={filteredBlockSizeData} unit="Bytes" />
-            <ChartCard title="Block time" subtitle="Average block time in seconds" data={filteredBlockTimeData} unit="Seconds" formatter={(val: number) => val.toFixed(2)} />
-          </div>
-        </>
-      )}
-
-      {/* Tokens Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Tokens') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Tokens</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="Token transfers" subtitle="Number of token transfers" data={filteredTokenTransfersData} unit="Transfers" />
-          </div>
-        </>
-      )}
-
-      {/* Gas Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Gas') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Gas</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="Gas used" subtitle="Total gas used by transactions" data={filteredGasUsedData} unit="Gas" />
-            <ChartCard title="Gas price" subtitle="Average gas price in Gwei" data={filteredGasPriceData} unit="Gwei" />
-          </div>
-        </>
-      )}
-
-      {/* Contracts Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'Contracts') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>Contracts</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="New contracts" subtitle="Number of new contracts created" data={filteredNewContractsData} unit="Contracts" />
-            <ChartCard title="Verified contracts" subtitle="Number of verified contracts" data={filteredVerifiedContractsData} unit="Contracts" />
-          </div>
-        </>
-      )}
-
-      {/* User Operations Section */}
-      {(selectedCategory === 'All stats' || selectedCategory === 'User operations') && (
-        <>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: '2rem 0 1rem 0' }}>User operations</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1rem' }}>
-            <ChartCard title="User operations" subtitle="Number of user operations (ERC-4337)" data={filteredUserOpsData} unit="Operations" />
+          {/* Transaction Table */}
+          <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', overflow: 'hidden' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #27272a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem', color: '#e4e4e7' }}>Recent Transactions</h4>
+              <a
+                href={`https://testnet.arcscan.app/address/${address}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#60a5fa', fontSize: '0.8rem', textDecoration: 'none' }}
+              >
+                View all on ArcScan <ExternalLink size={12} />
+              </a>
+            </div>
+            {walletLoading ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#71717a' }}>Loading transactions...</div>
+            ) : walletTxs.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#71717a' }}>No transactions found</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+                      {['Type', 'Hash', 'From', 'To', 'Value (USDC)', 'Gas Fee', 'Time', 'Status'].map(h => (
+                        <th key={h} style={{ padding: '0.7rem 1rem', textAlign: 'left', color: '#71717a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #27272a' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {walletTxs.slice(0, 20).map((tx, i) => {
+                      const isOut = tx.from?.hash?.toLowerCase() === address?.toLowerCase();
+                      const val = (parseFloat(tx.value || '0') / 1e18).toFixed(4);
+                      const fee = (parseFloat(tx.fee?.value || '0') / 1e18).toFixed(6);
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' }} className="hover:bg-white/5">
+                          <td style={{ padding: '0.65rem 1rem' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: isOut ? '#f87171' : '#34d399' }}>
+                              {isOut ? <ArrowUpRight size={13} /> : <ArrowDownLeft size={13} />}
+                              {isOut ? 'OUT' : 'IN'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem' }}>
+                            <a href={`https://testnet.arcscan.app/tx/${tx.hash}`} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none', fontFamily: 'monospace' }}>
+                              {tx.hash.slice(0, 8)}...{tx.hash.slice(-4)}
+                            </a>
+                          </td>
+                          <td style={{ padding: '0.65rem 1rem', color: '#a1a1aa', fontFamily: 'monospace' }}>{shortenAddress(tx.from?.hash || '')}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: '#a1a1aa', fontFamily: 'monospace' }}>{tx.to ? shortenAddress(tx.to.hash) : '(contract)'}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: '#e4e4e7', fontWeight: 600 }}>{val}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: '#71717a' }}>{fee}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: '#71717a', whiteSpace: 'nowrap' }}>{formatTs(tx.timestamp)}</td>
+                          <td style={{ padding: '0.65rem 1rem' }}>
+                            <span style={{
+                              padding: '2px 8px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600,
+                              background: tx.status === 'ok' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
+                              color: tx.status === 'ok' ? '#34d399' : '#f87171'
+                            }}>
+                              {tx.status === 'ok' ? 'Success' : 'Failed'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -396,97 +304,17 @@ export const Analytics: React.FC = () => {
   );
 };
 
-// Top stat cards
-const StatCard = ({ title, value }: { title: string, value: string }) => (
-  <div style={{ 
-    background: '#18181b', 
-    border: '1px solid #27272a', 
-    borderRadius: '12px', 
-    padding: '16px 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    minHeight: '90px',
-    position: 'relative',
-    transition: 'all 0.2s ease',
-    cursor: 'pointer'
-  }}
-  className="hover:border-blue-500/50 hover:bg-white/5"
-  >
-    <div style={{ fontSize: '0.85rem', color: '#a1a1aa', marginBottom: '6px', fontWeight: '500' }}>{title}</div>
-    <div style={{ fontSize: '1.4rem', color: '#fff', fontWeight: '600', letterSpacing: '-0.01em' }}>{value}</div>
-    <div style={{ position: 'absolute', right: '16px', top: '16px', color: '#3f3f46' }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-        <line x1="8" y1="12" x2="16" y2="12"></line>
-      </svg>
+// ─────────────────────────────────────────────
+// Sub-component
+// ─────────────────────────────────────────────
+const WalletStatCard = ({ label, value, loading, color }: { label: string; value: string; loading: boolean; color: string }) => (
+  <div style={{ background: '#18181b', border: `1px solid ${color}30`, borderRadius: '12px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', transition: 'all 0.2s' }}>
+    <span style={{ fontSize: '0.78rem', color: '#71717a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+    <span style={{ fontSize: '1.2rem', fontWeight: 700, color: loading ? '#71717a' : '#e4e4e7', fontFamily: 'monospace' }}>
+      {loading ? '...' : value}
+    </span>
+    <div style={{ height: '3px', borderRadius: '2px', background: `${color}20`, overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: loading ? '40%' : '100%', background: color, transition: 'width 0.5s ease', borderRadius: '2px' }} />
     </div>
   </div>
 );
-
-// Reusable Chart Component
-const ChartCard = React.memo(({ title, subtitle, data, unit, loading = false, formatter = formatNumber }: any) => {
-  const [isMounted, setIsMounted] = useState(false);
-  
-  useEffect(() => {
-    // Stagger rendering slightly based on random or just simple delay to prevent main thread blocking
-    const t = setTimeout(() => setIsMounted(true), 50 + Math.random() * 100);
-    return () => clearTimeout(t);
-  }, []);
-
-  const showLoading = loading || !isMounted;
-
-  return (
-    <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '12px', padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-        <div>
-          <h4 style={{ margin: 0, color: '#60a5fa', fontSize: '1.15rem', fontWeight: '600' }}>{title}</h4>
-          <div style={{ color: '#a1a1aa', fontSize: '0.85rem', marginTop: '6px' }}>{subtitle}</div>
-        </div>
-        <button style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '6px', padding: '6px', color: '#a1a1aa', cursor: 'pointer' }}>
-          <MoreHorizontal size={20} />
-        </button>
-      </div>
-      <div style={{ height: '260px', width: '100%' }}>
-        {showLoading ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>Loading chart...</div>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id={`color-${title.replace(/\s+/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
-              <XAxis 
-                dataKey="date" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#71717a', fontSize: 11 }} 
-                dy={10} 
-                minTickGap={30} 
-              />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#71717a', fontSize: 11 }} 
-                tickFormatter={(val) => formatter(val)} 
-                dx={-10} 
-                width={45} 
-              />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fff' }}
-                itemStyle={{ color: '#60a5fa' }}
-                labelStyle={{ color: '#a1a1aa', marginBottom: '8px' }}
-                formatter={(value: any) => [formatter(value), unit]}
-              />
-              <Area type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={2} fillOpacity={1} fill={`url(#color-${title.replace(/\s+/g, '')})`} />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  );
-});

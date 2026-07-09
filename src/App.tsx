@@ -13,6 +13,7 @@ import { TransactionMemos } from './components/TransactionMemos';
 import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu } from 'lucide-react';
 import { UniswapPortal } from './components/UniswapPortal';
 import { MerchantTreasury } from './components/MerchantTreasury';
+import { Bridge } from './components/Bridge';
 
 // Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
 if (typeof window !== 'undefined') {
@@ -37,7 +38,7 @@ if (typeof window !== 'undefined') {
   };
 }
 
-type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury';
+type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury' | 'bridge';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -53,7 +54,7 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury'];
+  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury', 'bridge'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
@@ -251,6 +252,13 @@ function App() {
               Uniswap 🦄
             </a>
             <a
+              className={`nav-link ${currentView === 'bridge' ? 'active' : ''}`}
+              onClick={() => navigateTo('bridge')}
+              style={currentView === 'bridge' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
+            >
+              Bridge (CCTP) 🌉
+            </a>
+            <a
               className={`nav-link ${currentView === 'payments' ? 'active' : ''}`}
               onClick={() => navigateTo('payments')}
             >
@@ -350,6 +358,12 @@ function App() {
             </main>
           )}
 
+          {currentView === 'bridge' && (
+            <main className="page-view">
+              <Bridge connectedAccount={address} getProvider={getProvider} />
+            </main>
+          )}
+
           {currentView === 'uniswap' && (
             <main className="page-view" style={{ marginTop: '0' }}>
               <UniswapPortal connectedAccount={address} getProvider={getProvider} />
@@ -370,7 +384,7 @@ function App() {
 
           {currentView === 'analytics' && (
             <main className="page-view">
-              <Analytics />
+              <Analytics address={address} />
             </main>
           )}
 
