@@ -14,7 +14,7 @@ interface MerchantTreasuryProps {
 const TOKEN_CONFIGS = {
   USDC: { address: '0x3600000000000000000000000000000000000000', decimals: 6, icon: '🪙' },
   EURC: { address: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', decimals: 6, icon: '💶' },
-  cirBTC: { address: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF', decimals: 8, icon: '₿' }
+  cirBTC: { address: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', decimals: 6, icon: '₿' }
 };
 
 type TokenType = 'USDC' | 'EURC' | 'cirBTC';
@@ -37,8 +37,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
     let loaded = {
       USDC: { address: defaultUSDC, txHash: initialTx, isSimulated: false },
-      EURC: { address: defaultEURC, txHash: '', isSimulated: false },
-      cirBTC: { address: defaultCirBTC, txHash: '', isSimulated: false }
+      EURC: { address: defaultEURC, txHash: '0x16671fc68657ab32519753751ca3190023564cc9f83a01dd39f9c209df8c999b', isSimulated: false },
+      cirBTC: { address: defaultCirBTC, txHash: '0x90ed667ae98888a8bd40aa7b8d44429710342584e8e97df05ba557acf316e640', isSimulated: false }
     };
 
     if (saved) {
@@ -46,26 +46,21 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         const parsed = JSON.parse(saved);
         if (parsed.USDC && parsed.EURC && parsed.cirBTC) {
           loaded = parsed;
-          
           let needsUpdate = false;
 
-          // Upgrade empty/mock EURC address or incorrect wallet addresses to the newly deployed EURC contract
-          const isUserWalletEURC = loaded.EURC.address && (
-            loaded.EURC.address.toLowerCase() === '0xb9bd0ba29287c0493f1cc0ecd8c706f169332954'.toLowerCase() ||
-            loaded.EURC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497E435cF25b65001D224'.toLowerCase()
-          );
-          if (!loaded.EURC.address || loaded.EURC.isSimulated || loaded.EURC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWalletEURC) {
-            loaded.EURC = { address: defaultEURC, txHash: '', isSimulated: false };
+          // Force upgrade to the user's requested new addresses if they don't match
+          if (loaded.USDC.address && loaded.USDC.address.toLowerCase() !== defaultUSDC.toLowerCase()) {
+            loaded.USDC = { address: defaultUSDC, txHash: initialTx, isSimulated: false };
             needsUpdate = true;
           }
 
-          // Upgrade empty/mock cirBTC address or incorrect wallet addresses to the newly deployed cirBTC contract
-          const isUserWalletCirBTC = loaded.cirBTC.address && (
-            loaded.cirBTC.address.toLowerCase() === '0xb9bd0ba29287c0493f1cc0ecd8c706f169332954'.toLowerCase() ||
-            loaded.cirBTC.address.toLowerCase() === '0xb59b2c4efdae4a9d9eb497E435cF25b65001D224'.toLowerCase()
-          );
-          if (!loaded.cirBTC.address || loaded.cirBTC.isSimulated || loaded.cirBTC.address.toLowerCase() === '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b'.toLowerCase() || isUserWalletCirBTC) {
-            loaded.cirBTC = { address: defaultCirBTC, txHash: '', isSimulated: false };
+          if (loaded.EURC.address && loaded.EURC.address.toLowerCase() !== defaultEURC.toLowerCase()) {
+            loaded.EURC = { address: defaultEURC, txHash: '0x16671fc68657ab32519753751ca3190023564cc9f83a01dd39f9c209df8c999b', isSimulated: false };
+            needsUpdate = true;
+          }
+
+          if (loaded.cirBTC.address && loaded.cirBTC.address.toLowerCase() !== defaultCirBTC.toLowerCase()) {
+            loaded.cirBTC = { address: defaultCirBTC, txHash: '0x90ed667ae98888a8bd40aa7b8d44429710342584e8e97df05ba557acf316e640', isSimulated: false };
             needsUpdate = true;
           }
 
@@ -195,6 +190,41 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
       setOwnerAddress(connectedAccount);
     }
   }, [connectedAccount]);
+
+  const [isWrongNetwork, setIsWrongNetwork] = useState(false);
+
+  useEffect(() => {
+    const checkNetwork = async () => {
+      if (walletProvider) {
+        try {
+          const chainId = await walletProvider.request({ method: 'eth_chainId' });
+          if (chainId && chainId.toLowerCase() === '0x4cef52') {
+            setIsWrongNetwork(false);
+          } else {
+            setIsWrongNetwork(true);
+          }
+        } catch (e) {
+          setIsWrongNetwork(false);
+        }
+      } else {
+        setIsWrongNetwork(false);
+      }
+    };
+    checkNetwork();
+
+    if (walletProvider && walletProvider.on) {
+      const handleChainChanged = (chainId: string) => {
+        setIsWrongNetwork(chainId.toLowerCase() !== '0x4cef52');
+        handleRefresh();
+      };
+      walletProvider.on('chainChanged', handleChainChanged);
+      return () => {
+        if (walletProvider.removeListener) {
+          walletProvider.removeListener('chainChanged', handleChainChanged);
+        }
+      };
+    }
+  }, [walletProvider, connectedAccount]);
 
   const addLog = (msg: string) => {
     setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
@@ -382,8 +412,21 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
     setHistoryLoading(true);
     try {
-      // Always use public JsonRpcProvider for read-only event queries to avoid MetaMask network mismatch
-      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      let provider;
+      try {
+        if (walletProvider) {
+          const chainId = await walletProvider.request({ method: 'eth_chainId' });
+          if (chainId && chainId.toLowerCase() === '0x4cef52') {
+            provider = new BrowserProvider(walletProvider);
+          } else {
+            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+          }
+        } else {
+          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        }
+      } catch (e) {
+        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      }
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
@@ -557,24 +600,61 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
 
     try {
-      // Always use public JsonRpcProvider for read-only state queries to avoid MetaMask network mismatch or delays
-      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      let provider;
+      try {
+        if (walletProvider) {
+          const chainId = await walletProvider.request({ method: 'eth_chainId' });
+          if (chainId && chainId.toLowerCase() === '0x4cef52') {
+            provider = new BrowserProvider(walletProvider);
+          } else {
+            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+          }
+        } else {
+          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        }
+      } catch (e) {
+        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      }
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
-      const ownerVal = await contract.owner();
-      const usdcVal = await contract.usdc();
-      const balanceVal = await contract.balance();
+      // Query balance first (highest priority)
+      const balancePromise = contract.balance().then(val => {
+        const decimals = TOKEN_CONFIGS[selectedToken].decimals;
+        setVaultBalance(formatUnits(val, decimals));
+        addLog(`Treasury balance: ${formatUnits(val, decimals)} ${selectedToken}`);
+        return val;
+      }).catch(err => {
+        console.warn("Failed to query vault balance:", err);
+        return null;
+      });
 
-      setVaultOwner(ownerVal);
-      setVaultUsdcAddress(usdcVal);
+      // Query owner and token address only if they are not already set for this contract
+      const needsMetadata = !vaultOwner || !vaultUsdcAddress || vaultOwner === ownerAddress || vaultUsdcAddress === usdcAddress;
 
-      const decimals = TOKEN_CONFIGS[selectedToken].decimals;
-      setVaultBalance(formatUnits(balanceVal, decimals));
+      if (needsMetadata) {
+        const ownerPromise = contract.owner().then(val => {
+          setVaultOwner(val);
+          return val;
+        }).catch(err => {
+          console.warn("Failed to query owner:", err);
+          return null;
+        });
+
+        const usdcPromise = contract.usdc().then(val => {
+          setVaultUsdcAddress(val);
+          return val;
+        }).catch(err => {
+          console.warn("Failed to query token address:", err);
+          return null;
+        });
+
+        await Promise.all([balancePromise, ownerPromise, usdcPromise]);
+      } else {
+        await balancePromise;
+      }
 
       addLog(`On-chain state updated successfully.`);
-      addLog(`Treasury balance: ${formatUnits(balanceVal, decimals)} ${selectedToken}`);
-
       fetchOnChainHistory();
     } catch (err: any) {
       addLog(`Error querying on-chain state: ${err.message || err}`);
@@ -592,7 +672,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     if (deployedContractAddress && activeTab === 'interact') {
       handleRefresh();
     }
-  }, [deployedContractAddress, activeTab, selectedToken]);
+  }, [deployedContractAddress, activeTab, selectedToken, connectedAccount, walletProvider]);
 
   const handleDeposit = async () => {
     addLog(`[DEBUG] handleDeposit clicked. Token: ${selectedToken}, Contract: ${deployedContractAddress || 'None'}, Amount: ${depositAmount || 'None'}, isSimulated: ${isSimulated}, walletProvider: ${walletProvider ? 'Present' : 'Absent'}`);
@@ -649,8 +729,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       const treasuryContract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, signer);
       
-      // Query the contract directly for the token address it uses to ensure we approve the correct token
-      const tokenAddress = await treasuryContract.usdc();
+      // Use local config address instead of query to avoid redundant network round-trips
+      const tokenAddress = TOKEN_CONFIGS[selectedToken].address;
 
       const tokenContract = new Contract(tokenAddress, [
         "function approve(address spender, uint256 amount) returns (bool)",
@@ -698,7 +778,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       handleRefresh();
     } catch (err: any) {
-      addLog(`Deposit transaction failed: ${err.message || err}`);
+      const errMsg = err.message || err.toString();
+      addLog(`Deposit transaction failed: ${errMsg}`);
+      alert(`Deposit failed: ${errMsg}`);
     } finally {
       setLoading(false);
     }
@@ -780,7 +862,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
       handleRefresh();
     } catch (err: any) {
-      addLog(`Withdrawal transaction failed: ${err.message || err}`);
+      const errMsg = err.message || err.toString();
+      addLog(`Withdrawal transaction failed: ${errMsg}`);
+      alert(`Withdrawal failed: ${errMsg}`);
     } finally {
       setLoading(false);
     }
@@ -817,6 +901,46 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           <p className="page-subtitle">Deploy and interact with your custom Solidity contract using Circle SCP</p>
         </div>
       </div>
+
+      {isWrongNetwork && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '12px',
+          padding: '1rem',
+          marginBottom: '1.25rem',
+          color: '#f87171',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.95rem',
+          gap: '1.5rem'
+        }}>
+          <span>⚠️ Your wallet is connected to a different network. Please switch to Arc Testnet to view balances and make transactions.</span>
+          <button
+            onClick={async () => {
+              if (walletProvider) {
+                await switchOrAddArcNetwork(walletProvider);
+                const chainId = await walletProvider.request({ method: 'eth_chainId' });
+                setIsWrongNetwork(chainId && chainId.toLowerCase() !== '0x4cef52');
+                handleRefresh();
+              }
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: '#fff',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Switch to Arc Testnet
+          </button>
+        </div>
+      )}
 
       <div className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
 
@@ -1072,8 +1196,15 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               {/* Balance Card */}
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
                 <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: '#a1a1aa', fontWeight: 600 }}>{selectedToken} Balance in Vault</span>
-                <span style={{ fontSize: '2.5rem', fontWeight: 700, color: '#fff', fontFamily: 'Outfit, sans-serif' }}>
-                  {vaultBalance} <span style={{ fontSize: '1.2rem', color: '#a78bfa' }}>{selectedToken}</span>
+                <span style={{ 
+                  fontSize: '2.5rem', 
+                  fontWeight: 700, 
+                  color: '#fff', 
+                  fontFamily: 'Outfit, sans-serif',
+                  opacity: isRefreshing ? 0.6 : 1,
+                  transition: 'opacity 0.2s ease'
+                }}>
+                  {isRefreshing && vaultBalance === '0' ? 'Loading...' : vaultBalance} <span style={{ fontSize: '1.2rem', color: '#a78bfa' }}>{selectedToken}</span>
                 </span>
               </div>
 

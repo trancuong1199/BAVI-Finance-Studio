@@ -9,6 +9,7 @@ interface AgenticJobsProps {
 
 const AGENTIC_COMMERCE_CONTRACT = "0x0747EEf0706327138c69792bF28Cd525089e4583";
 const USDC_CONTRACT = "0x3600000000000000000000000000000000000000";
+const IDENTITY_REGISTRY = "0x8004A818BFB912233c491871b3d84c89A494BD9e";
 
 const agenticCommerceAbi = [
   "function createJob(address provider, address evaluator, uint256 expiredAt, string description, address hook) returns (uint256 jobId)",
@@ -29,7 +30,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
   const [providerAddress, setProviderAddress] = useState("");
   const [budget, setBudget] = useState("1.0");
   const [description, setDescription] = useState("Demo Job for ARC Swap");
-  
+
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<number>(-1);
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
   const [splitPercent, setSplitPercent] = useState("20");
   const [isSubscription, setIsSubscription] = useState(false);
   const [billingInterval, setBillingInterval] = useState("daily");
+
+
 
   const STATUS_NAMES = ["Open", "Funded", "Submitted", "Completed", "Rejected", "Expired"];
 
@@ -93,42 +96,78 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
     }
   }, [jobId]);
 
-  const handleRegisterAgent = async () => {
+  useEffect(() => {
+    const checkAgentRegistration = async () => {
+      if (!connectedAccount) return;
+      try {
+        const signer = await getEthersSigner();
+        const contract = new ethers.Contract(IDENTITY_REGISTRY, [
+          "function balanceOf(address owner) view returns (uint256)"
+        ], signer);
+        const balance = await contract.balanceOf(connectedAccount);
+        if (balance > 0n) {
+          setAgentIdentityRegistered(true);
+          appendLog(`[ERC-8004 Identity] Wallet holds an Agent Identity NFT. Agent is already registered!`);
+        }
+      } catch (e) {
+        console.error("Failed to check agent registration:", e);
+      }
+    };
+    checkAgentRegistration();
+  }, [connectedAccount]);
+
+  const handleRegisterAgent = async (customName?: string, customUri?: string) => {
     if (!connectedAccount) return;
+    const name = customName || agentName;
+    const uri = customUri || agentUri;
     setAgentRegistering(true);
     appendLog("Initiating ERC-8004 Agent Registration on Arc Testnet...");
-    appendLog(`  Agent Name: ${agentName}`);
-    appendLog(`  Identity Registry URI: ${agentUri}`);
-    
-    // Simulate transaction submission on Arc Testnet
-    setTimeout(() => {
-      setAgentRegistering(false);
+    appendLog(`  Agent Name: ${name}`);
+    appendLog(`  Identity Registry URI: ${uri}`);
+
+    try {
+      const signer = await getEthersSigner();
+      const contract = new ethers.Contract(IDENTITY_REGISTRY, [
+        "function register(string metadataURI) returns (uint256)"
+      ], signer);
+
+      const tx = await contract.register(uri);
+      appendLog(`Transaction sent! Waiting for confirmation... Hash: ${tx.hash}`);
+      const receipt = await tx.wait();
+
       setAgentIdentityRegistered(true);
-      const mockTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
       appendLog(`\n[ERC-8004 SUCCESS] Agent Registered on Arc Testnet!`);
-      appendLog(`  Registry Tx: ${mockTxHash}`);
+      appendLog(`  Registry Tx: ${receipt.hash}`);
       appendLog(`  Agent Owner Key: ${connectedAccount}`);
+
       addApiLog({
         status: 201,
         method: "POST",
-        path: `/v1/w3s/agentic-commerce/registerAgent?hash=${mockTxHash.substring(0, 10)}...`
+        path: `/v1/w3s/agentic-commerce/registerAgent?hash=${receipt.hash.substring(0, 10)}...`
       });
-    }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      appendLog(`❌ Registration failed: ${err.message || err.toString()}`);
+    } finally {
+      setAgentRegistering(false);
+    }
   };
 
-  const handleCreateAndBudget = async () => {
-    if (!connectedAccount) return;
+  const handleCreateAndBudget = async (customProvider?: string, customDesc?: string, customBudget?: string) => {
+    if (!connectedAccount) return null;
     setLoading(true);
     setLog("");
     try {
-      const targetProvider = providerAddress || connectedAccount;
+      const budgetVal = customBudget || budget;
+      const descVal = customDesc || description;
+      const providerVal = customProvider || providerAddress || connectedAccount;
 
       // Policy Engine checks (Vyper blog post rules)
       if (agentIdentityRegistered) {
         appendLog(`[Policy Engine] Verifying ERC-8004 Agent: ${agentName}`);
-        appendLog(`[Policy Engine] Checking Spending Cap: ${budget} USDC against limit of ${spendingLimit} USDC...`);
-        if (parseFloat(budget) > parseFloat(spendingLimit)) {
-          throw new Error(`Policy violation: Requested budget (${budget} USDC) exceeds daily spending cap limit (${spendingLimit} USDC).`);
+        appendLog(`[Policy Engine] Checking Spending Cap: ${budgetVal} USDC against limit of ${spendingLimit} USDC...`);
+        if (parseFloat(budgetVal) > parseFloat(spendingLimit)) {
+          throw new Error(`Policy violation: Requested budget (${budgetVal} USDC) exceeds daily spending cap limit (${spendingLimit} USDC).`);
         }
         appendLog(`[Policy Engine] Policy checks PASSED! Compiling Python constraints with Titanoboa/pytest...`);
       } else {
@@ -146,13 +185,13 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
       const expiredAt = Math.floor(Date.now() / 1000) + 3600 * 24; // 1 day from now
       appendLog("Creating job on Arc Testnet...");
       const createTx = await contract.createJob(
-        targetProvider, 
+        providerVal,
         connectedAccount, // Evaluator is the client for this demo
-        expiredAt, 
-        description, 
+        expiredAt,
+        descVal,
         "0x0000000000000000000000000000000000000000" // No hook
       );
-      
+
       appendLog(`Transaction sent! Waiting for confirmation... Hash: ${createTx.hash}`);
       const receipt = await createTx.wait();
       addApiLog({
@@ -161,7 +200,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
         path: `/v1/w3s/agentic-commerce/createJob?hash=${createTx.hash.substring(0, 10)}...`
       });
       appendLog(`Job Created successfully! [Block: ${receipt.blockNumber}, Gas Used: ${receipt.gasUsed.toString()}]`);
-      
+
       // Parse event to get Job ID
       let newJobId = null;
       for (const log of receipt.logs) {
@@ -173,15 +212,15 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
           }
         } catch (e) { /* ignore non-matching logs */ }
       }
-      
+
       if (!newJobId) throw new Error("Could not parse Job ID from events");
-      
+
       setJobId(newJobId);
       appendLog(`Extracted Job ID: ${newJobId}`);
 
       // 2. Set Budget
       appendLog("Setting budget...");
-      const budgetUnits = ethers.parseUnits(budget, 6); // USDC uses 6 decimals
+      const budgetUnits = ethers.parseUnits(budgetVal, 6); // USDC uses 6 decimals
       const budgetTx = await contract.setBudget(newJobId, budgetUnits, "0x");
       const budgetReceipt = await budgetTx.wait();
       addApiLog({
@@ -190,92 +229,102 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
         path: `/v1/w3s/agentic-commerce/jobs/${newJobId}/budget?hash=${budgetTx.hash.substring(0, 10)}...`
       });
       appendLog(`Budget set successfully! [Block: ${budgetReceipt.blockNumber}]`);
-      
+
       await fetchJobStatus(newJobId, true);
+      return newJobId;
 
     } catch (err: any) {
       appendLog(`Error: ${err.message || err.toString()}`);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFund = async () => {
-    if (!jobId || !connectedAccount) return;
+  const handleFund = async (customJobId?: string, customBudget?: string) => {
+    const targetJobId = customJobId || jobId;
+    const budgetVal = customBudget || budget;
+    if (!targetJobId || !connectedAccount) return;
     setLoading(true);
     try {
       const signer = await getEthersSigner();
       const usdc = new ethers.Contract(USDC_CONTRACT, erc20Abi, signer);
       const agentic = new ethers.Contract(AGENTIC_COMMERCE_CONTRACT, agenticCommerceAbi, signer);
-      
-      const budgetUnits = ethers.parseUnits(budget, 6); // USDC uses 6 decimals
 
-      appendLog(`Approving ${budget} USDC...`);
+      const budgetUnits = ethers.parseUnits(budgetVal, 6); // USDC uses 6 decimals
+
+      appendLog(`Approving ${budgetVal} USDC...`);
       const approveTx = await usdc.approve(AGENTIC_COMMERCE_CONTRACT, budgetUnits);
       const approveReceipt = await approveTx.wait();
       appendLog(`Approval successful! [Block: ${approveReceipt.blockNumber}]`);
 
       appendLog("Funding Escrow...");
-      const fundTx = await agentic.fund(jobId, "0x");
+      const fundTx = await agentic.fund(targetJobId, "0x");
       const fundReceipt = await fundTx.wait();
       addApiLog({
         status: 200,
         method: "POST",
-        path: `/v1/w3s/agentic-commerce/jobs/${jobId}/fund?hash=${fundTx.hash.substring(0, 10)}...`
+        path: `/v1/w3s/agentic-commerce/jobs/${targetJobId}/fund?hash=${fundTx.hash.substring(0, 10)}...`
       });
       appendLog(`Funded successfully! [Block: ${fundReceipt.blockNumber}]`);
-      
-      await fetchJobStatus(jobId, true);
+
+      await fetchJobStatus(targetJobId, true);
 
     } catch (err: any) {
       appendLog(`Error: ${err.message || err.toString()}`);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmitAndComplete = async () => {
-    if (!jobId || !connectedAccount) return;
+  const handleSubmitAndComplete = async (customJobId?: string, customBudget?: string, customProvider?: string) => {
+    const targetJobId = customJobId || jobId;
+    const budgetVal = customBudget || budget;
+    const providerVal = customProvider || providerAddress || connectedAccount;
+    if (!targetJobId || !connectedAccount) return;
     setLoading(true);
     try {
-      const targetProvider = providerAddress || connectedAccount;
       const signer = await getEthersSigner();
       const agentic = new ethers.Contract(AGENTIC_COMMERCE_CONTRACT, agenticCommerceAbi, signer);
 
       appendLog("Submitting Deliverable...");
       const deliverableHash = ethers.id("arc-erc8183-demo-deliverable");
-      const submitTx = await agentic.submit(jobId, deliverableHash, "0x");
+      const submitTx = await agentic.submit(targetJobId, deliverableHash, "0x");
       const submitReceipt = await submitTx.wait();
       appendLog(`Submitted successfully! [Block: ${submitReceipt.blockNumber}]`);
 
       // Split Payments simulation
       if (splitAddress && splitPercent) {
         appendLog(`\n[Split Payments Policy] Router executing payment split:`);
-        const splitAmt = (parseFloat(budget) * parseFloat(splitPercent)) / 100;
-        const providerAmt = parseFloat(budget) - splitAmt;
-        appendLog(`  -> ${providerAmt.toFixed(2)} USDC to Provider: ${targetProvider}`);
+        const splitAmt = (parseFloat(budgetVal) * parseFloat(splitPercent)) / 100;
+        const providerAmt = parseFloat(budgetVal) - splitAmt;
+        appendLog(`  -> ${providerAmt.toFixed(2)} USDC to Provider: ${providerVal}`);
         appendLog(`  -> ${splitAmt.toFixed(2)} USDC to Split Counterparty (${splitPercent}%): ${splitAddress}`);
       }
 
       appendLog("Completing Job (Approving as Evaluator)...");
       const reasonHash = ethers.id("work-delivered-and-approved");
-      const completeTx = await agentic.complete(jobId, reasonHash, "0x");
+      const completeTx = await agentic.complete(targetJobId, reasonHash, "0x");
       const completeReceipt = await completeTx.wait();
       addApiLog({
         status: 200,
         method: "POST",
-        path: `/v1/w3s/agentic-commerce/jobs/${jobId}/complete?hash=${completeTx.hash.substring(0, 10)}...`
+        path: `/v1/w3s/agentic-commerce/jobs/${targetJobId}/complete?hash=${completeTx.hash.substring(0, 10)}...`
       });
       appendLog(`Job Completed successfully! [Block: ${completeReceipt.blockNumber}]`);
-      
-      await fetchJobStatus(jobId, true);
+
+      await fetchJobStatus(targetJobId, true);
 
     } catch (err: any) {
       appendLog(`Error: ${err.message || err.toString()}`);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
+
+
 
   const isFundable = jobStatus === 0;
   const isCompletable = jobStatus === 1;
@@ -303,10 +352,10 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        
+
         {/* Left Column: Identity & Policy Constraints */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          
+
           {/* Card 1: ERC-8004 Identity primitive */}
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '1.2rem' }}>
             <h3 style={{ color: '#fff', fontSize: '1rem', marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -315,7 +364,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
             <p style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '1rem' }}>
               Bind autonomous capabilities and metadata to a verified identity on Arc Testnet.
             </p>
-            
+
             {agentIdentityRegistered ? (
               <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', padding: '0.8rem', borderRadius: '8px', marginBottom: '1rem' }}>
                 <p style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: 600 }}>🟢 Agent Registered & Verified</p>
@@ -326,8 +375,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '1rem' }}>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '0.75rem' }}>Agent Registry Name</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={agentName}
                     onChange={(e) => setAgentName(e.target.value)}
                     className="kit-input"
@@ -336,17 +385,17 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                 </div>
                 <div className="input-group">
                   <label className="input-label" style={{ fontSize: '0.75rem' }}>Capability Schema URI</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={agentUri}
                     onChange={(e) => setAgentUri(e.target.value)}
                     className="kit-input"
                     style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                   />
                 </div>
-                <button 
+                <button
                   type="button"
-                  onClick={handleRegisterAgent}
+                  onClick={() => handleRegisterAgent()}
                   disabled={agentRegistering}
                   className="kit-action-btn"
                   style={{ padding: '0.5rem', fontSize: '0.85rem', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)' }}
@@ -369,8 +418,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="input-group">
                 <label className="input-label" style={{ fontSize: '0.75rem' }}>Daily Spending Cap (USDC)</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={spendingLimit}
                   onChange={(e) => setSpendingLimit(e.target.value)}
                   className="kit-input"
@@ -384,16 +433,16 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                   <span>Split Settlements</span>
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.5rem' }}>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Partner Address (0x...)"
                     value={splitAddress}
                     onChange={(e) => setSplitAddress(e.target.value)}
                     className="kit-input"
                     style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
                   />
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     placeholder="20"
                     value={splitPercent}
                     onChange={(e) => setSplitPercent(e.target.value)}
@@ -406,8 +455,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
               {/* Subscriptions */}
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.8rem' }}>
                 <label style={{ color: '#fff', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     checked={isSubscription}
                     onChange={(e) => setIsSubscription(e.target.checked)}
                     style={{ cursor: 'pointer' }}
@@ -415,7 +464,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                   Enable Recurring Subscription
                 </label>
                 {isSubscription && (
-                  <select 
+                  <select
                     value={billingInterval}
                     onChange={(e) => setBillingInterval(e.target.value)}
                     className="kit-input"
@@ -433,7 +482,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
 
         {/* Right Column: Escrow Job Workflow & Logs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          
+
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '1.2rem' }}>
             <h3 style={{ color: '#fff', fontSize: '1rem', marginBottom: '0.8rem' }}>
               💼 ERC-8183 Job Execution
@@ -443,8 +492,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="input-group">
                   <label className="input-label">Provider Address (Optional)</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={providerAddress}
                     onChange={(e) => setProviderAddress(e.target.value)}
                     placeholder="0x... (Defaults to your wallet)"
@@ -453,8 +502,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                 </div>
                 <div className="input-group">
                   <label className="input-label">Job Description</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     className="kit-input"
@@ -462,17 +511,17 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                 </div>
                 <div className="input-group">
                   <label className="input-label">Budget (USDC)</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={budget}
                     onChange={(e) => setBudget(e.target.value)}
                     step="0.1"
                     className="kit-input"
                   />
                 </div>
-                
-                <button 
-                  onClick={handleCreateAndBudget}
+
+                <button
+                  onClick={() => handleCreateAndBudget()}
                   disabled={loading}
                   className="kit-action-btn"
                   style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}
@@ -496,18 +545,18 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                     </span>
                   </div>
                 </div>
-                
+
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                  <button 
-                    onClick={handleFund}
+                  <button
+                    onClick={() => handleFund()}
                     disabled={loading || !isFundable}
                     className="kit-action-btn"
                     style={{ flex: 1, backgroundColor: !isFundable ? '#333' : undefined, cursor: !isFundable ? 'not-allowed' : 'pointer' }}
                   >
                     2. Approve & Fund
                   </button>
-                  <button 
-                    onClick={handleSubmitAndComplete}
+                  <button
+                    onClick={() => handleSubmitAndComplete()}
                     disabled={loading || !isCompletable}
                     className="kit-action-btn"
                     style={{ flex: 1, backgroundColor: !isCompletable ? '#333' : '#059669', cursor: !isCompletable ? 'not-allowed' : 'pointer' }}
@@ -515,8 +564,8 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
                     3. Submit & Complete
                   </button>
                 </div>
-                
-                <button 
+
+                <button
                   onClick={() => { setJobId(null); setLog(""); setJobStatus(-1); }}
                   style={{ width: '100%', padding: '1rem', marginTop: '1rem', backgroundColor: 'transparent', border: 'none', color: '#A0A2A4', cursor: 'pointer' }}
                 >

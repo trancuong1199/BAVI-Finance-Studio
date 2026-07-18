@@ -895,7 +895,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
                     }}
                   >
                     {Object.values(TOKENS).map(t => (
-                      <option key={t.symbol} value={t.symbol}>{t.icon} {t.symbol}</option>
+                      <option key={t.symbol} value={t.symbol} style={{ background: '#1e293b', color: 'white' }}>{t.icon} {t.symbol}</option>
                     ))}
                   </select>
                 </div>
@@ -974,7 +974,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
                     }}
                   >
                     {Object.values(TOKENS).map(t => (
-                      <option key={t.symbol} value={t.symbol}>{t.icon} {t.symbol}</option>
+                      <option key={t.symbol} value={t.symbol} style={{ background: '#1e293b', color: 'white' }}>{t.icon} {t.symbol}</option>
                     ))}
                   </select>
                 </div>

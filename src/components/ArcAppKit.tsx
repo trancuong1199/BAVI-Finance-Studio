@@ -3,7 +3,8 @@ import { ArrowUpDown, RefreshCw } from 'lucide-react';
 import { AgenticJobs } from './AgenticJobs';
 import { CircleIntegration } from './CircleIntegration';
 import { saveTransaction } from '../lib/TransactionHistory';
-import { JsonRpcProvider, Contract, formatUnits, Interface } from 'ethers';
+import { JsonRpcProvider, BrowserProvider, Contract, formatUnits, Interface } from 'ethers';
+import { switchOrAddArcNetwork } from '../utils/arcChain';
 
 const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
 const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
@@ -69,6 +70,42 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
   const [swapAmount, setSwapAmount] = useState('1.00');
   const [statusMsg, setStatusMsg] = useState<string>('');
   const [isReversed, setIsReversed] = useState(false);
+  const [isWrongNetwork, setIsWrongNetwork] = useState(false);
+
+  useEffect(() => {
+    const checkNetwork = async () => {
+      const eth = getProvider();
+      if (eth) {
+        try {
+          const chainId = await eth.request({ method: 'eth_chainId' });
+          if (chainId && chainId.toLowerCase() === ARC_CHAIN_ID.toLowerCase()) {
+            setIsWrongNetwork(false);
+          } else {
+            setIsWrongNetwork(true);
+          }
+        } catch (e) {
+          setIsWrongNetwork(false);
+        }
+      } else {
+        setIsWrongNetwork(false);
+      }
+    };
+    checkNetwork();
+
+    const eth = getProvider();
+    if (eth && eth.on) {
+      const handleChainChanged = (chainId: string) => {
+        setIsWrongNetwork(chainId.toLowerCase() !== ARC_CHAIN_ID.toLowerCase());
+        fetchBalances();
+      };
+      eth.on('chainChanged', handleChainChanged);
+      return () => {
+        if (eth.removeListener) {
+          eth.removeListener('chainChanged', handleChainChanged);
+        }
+      };
+    }
+  }, [connectedAccount, getProvider]);
 
   // USDC <➔ EURC Exchange and Balance states
   const [balances, setBalances] = useState<{ usdc: string; eurc: string }>({ usdc: '0.0000', eurc: '0.0000' });
@@ -77,7 +114,23 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
 
   const fetchExchangeRate = async () => {
     try {
-      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      const eth = getProvider();
+      let provider;
+      try {
+        if (eth) {
+          const chainId = await eth.request({ method: 'eth_chainId' });
+          if (chainId && chainId.toLowerCase() === ARC_CHAIN_ID.toLowerCase()) {
+            provider = new BrowserProvider(eth);
+          } else {
+            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+          }
+        } else {
+          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        }
+      } catch (e) {
+        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      }
+
       const pool = new Contract(
         '0xe8f7fA2A412e98C537554643F83DA34DfdD50c23',
         ["function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16, uint16, uint16, uint8, bool)"],
@@ -101,28 +154,72 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
   const fetchBalances = async () => {
     if (!connectedAccount) return;
     setIsFetchingBalances(true);
-    try {
-      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      
-      // Native USDC (18 decimals)
-      const nativeBalance = await provider.getBalance(connectedAccount);
-      const usdcVal = parseFloat(formatUnits(nativeBalance, 18)).toFixed(4);
 
-      // ERC20 EURC (6 decimals)
+    let usdcVal = balances.usdc;
+    let eurcVal = balances.eurc;
+    
+    const eth = getProvider();
+    let provider;
+    
+    try {
+      if (eth) {
+        const chainId = await eth.request({ method: 'eth_chainId' });
+        if (chainId && chainId.toLowerCase() === ARC_CHAIN_ID.toLowerCase()) {
+          provider = new BrowserProvider(eth);
+        } else {
+          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        }
+      } else {
+        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      }
+    } catch (e) {
+      provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+    }
+
+    // Fetch USDC balance independently
+    try {
+      const nativeBalance = await provider.getBalance(connectedAccount);
+      usdcVal = parseFloat(formatUnits(nativeBalance, 18)).toFixed(4);
+    } catch (e) {
+      console.warn("Failed to fetch native USDC balance:", e);
+      // Fallback
+      try {
+        const fallbackProvider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        const nativeBalance = await fallbackProvider.getBalance(connectedAccount);
+        usdcVal = parseFloat(formatUnits(nativeBalance, 18)).toFixed(4);
+      } catch (err) {
+        console.warn("USDC fallback query failed:", err);
+      }
+    }
+
+    // Fetch EURC balance independently
+    try {
       const eurcContract = new Contract(
         '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
         ["function balanceOf(address account) view returns (uint256)"],
         provider
       );
       const eurcBalance = await eurcContract.balanceOf(connectedAccount);
-      const eurcVal = parseFloat(formatUnits(eurcBalance, 6)).toFixed(4);
-
-      setBalances({ usdc: usdcVal, eurc: eurcVal });
+      eurcVal = parseFloat(formatUnits(eurcBalance, 6)).toFixed(4);
     } catch (e) {
-      console.warn("Failed to fetch stablecoin balances:", e);
-    } finally {
-      setIsFetchingBalances(false);
+      console.warn("Failed to fetch EURC balance:", e);
+      // Fallback
+      try {
+        const fallbackProvider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        const eurcContract = new Contract(
+          '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
+          ["function balanceOf(address account) view returns (uint256)"],
+          fallbackProvider
+        );
+        const eurcBalance = await eurcContract.balanceOf(connectedAccount);
+        eurcVal = parseFloat(formatUnits(eurcBalance, 6)).toFixed(4);
+      } catch (err) {
+        console.warn("EURC fallback query failed:", err);
+      }
     }
+
+    setBalances({ usdc: usdcVal, eurc: eurcVal });
+    setIsFetchingBalances(false);
   };
 
   useEffect(() => {
@@ -397,6 +494,46 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
 
   return (
     <div className="glass-panel app-kit-panel">
+      {isWrongNetwork && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '12px',
+          padding: '0.85rem 1rem',
+          margin: '0.5rem 1rem 1rem',
+          color: '#f87171',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.85rem',
+          gap: '1rem'
+        }}>
+          <span>⚠️ Wallet is connected to a different network. Switch to Arc Testnet to view balances.</span>
+          <button
+            onClick={async () => {
+              const eth = getProvider();
+              if (eth) {
+                await switchOrAddArcNetwork(eth);
+                const chainId = await eth.request({ method: 'eth_chainId' });
+                setIsWrongNetwork(chainId && chainId.toLowerCase() !== ARC_CHAIN_ID.toLowerCase());
+                fetchBalances();
+              }
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: '#fff',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Switch Network
+          </button>
+        </div>
+      )}
       <div className="app-kit-tabs">
         <button
           className={`app-kit-tab ${activeTab === 'swap' ? 'active' : ''}`}
