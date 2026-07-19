@@ -2,7 +2,7 @@ import { type Chain } from 'viem';
 
 export const arcTestnet = {
   id: 5042002,
-  name: 'Arc Testnet',
+  name: 'Build on Arc',
   nativeCurrency: {
     decimals: 18,
     name: 'USDC',

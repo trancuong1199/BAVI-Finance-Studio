@@ -102,7 +102,7 @@ export const Payments: React.FC<PaymentsProps> = ({ walletProvider, address }) =
             method: 'wallet_addEthereumChain',
             params: [{
               chainId: ARC_CHAIN_ID,
-              chainName: 'Arc Testnet',
+              chainName: 'Build on Arc',
               nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
               rpcUrls: ['https://rpc.testnet.arc.network'],
               blockExplorerUrls: ['https://testnet.arcscan.app'],

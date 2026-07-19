@@ -29,7 +29,7 @@ export const Faucet: React.FC<FaucetProps> = ({ connectedAccount }) => {
         
         <h1 style={{ fontSize: '2rem', marginBottom: '1rem', color: '#fff' }}>Testnet Faucet</h1>
         <p style={{ color: '#A0A2A4', marginBottom: '2rem', fontSize: '1.1rem', lineHeight: '1.6' }}>
-          Get testnet USDC and EURC to test the Arc Finance Studio platform.<br/>
+          Get testnet USDC and EURC to test the BAVI Finance Studio platform.<br/>
           Tokens are provided directly from the official Circle Faucet.
         </p>
 

@@ -11,7 +11,7 @@ export interface Transaction {
   tokenSymbol?: string;
 }
 
-const STORAGE_KEY = 'arc_finance_transactions';
+const STORAGE_KEY = 'bavi_finance_transactions';
 
 export const saveTransaction = (tx: Transaction) => {
   const history = getTransactionHistory();

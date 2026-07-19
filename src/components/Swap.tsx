@@ -66,7 +66,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
     try {
       // If MetaMask, switch to Arc Testnet
       if (isMetaMask) {
-        setStatus({ type: "info", msg: "Switching network to Arc Testnet in MetaMask..." });
+        setStatus({ type: "info", msg: "Switching network to Build on Arc in MetaMask..." });
         const switched = await switchOrAddArcNetwork();
         if (!switched) {
           throw new Error("Failed to switch network in MetaMask.");
@@ -99,7 +99,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
 
       setStatus({
         type: "success",
-        msg: `Successfully swapped ${amountIn} ${tokenIn} for ${amountOut} ${tokenOut} on Arc Testnet!`,
+        msg: `Successfully swapped ${amountIn} ${tokenIn} for ${amountOut} ${tokenOut} on Build on Arc!`,
         txHash: (result as any).txHash || (result as any).transactionHash || (result as any).id || (typeof result === "string" ? result : undefined),
       });
 
@@ -133,7 +133,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
       const mockTxHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
       setStatus({
         type: "success",
-        msg: `[SIMULATED] Successfully swapped ${amountIn} ${tokenIn} for ${amountOut} ${tokenOut} on Arc Testnet!`,
+        msg: `[SIMULATED] Successfully swapped ${amountIn} ${tokenIn} for ${amountOut} ${tokenOut} on Build on Arc!`,
         txHash: mockTxHash,
       });
       setAmountIn("");
@@ -152,7 +152,7 @@ export const Swap: React.FC<SwapProps> = ({ adapter, userAddress, isMetaMask, ki
           </svg>
           Token Swap
         </h2>
-        <p>Exchange stablecoins or wrapped assets instantly on the same blockchain (Arc Testnet).</p>
+        <p>Exchange stablecoins or wrapped assets instantly on the same blockchain (Build on Arc).</p>
       </div>
 
       <form onSubmit={handleSwap}>

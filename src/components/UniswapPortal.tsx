@@ -6,7 +6,7 @@ import { BrowserProvider, Contract } from 'ethers';
 const ARC_CHAIN_ID = '0x4CEF52'; // 5042002 in hex
 const ARC_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_ID,
-  chainName: 'Arc Testnet',
+  chainName: 'Build on Arc',
   nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: ['https://rpc.testnet.arc.network'],
   blockExplorerUrls: ['https://testnet.arcscan.app'],
@@ -180,7 +180,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
       to: tx ? tx.to : 'Uniswap v4 Router',
       amount: tx ? `${tx.amount} ${tx.tokenSymbol || 'USDC'}` : '100 USDC',
       gasUsed: '98,420',
-      network: 'Arc Testnet (Simulated)',
+      network: 'Build on Arc (Simulated)',
     };
     
     setMockExplorerData(mockDetails);
@@ -406,7 +406,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
       }
 
       try {
-        setSwapStatus({ type: 'info', msg: 'Switching to Arc Testnet...' });
+        setSwapStatus({ type: 'info', msg: 'Switching to Build on Arc...' });
         
         // Ensure user is on Arc Testnet
         try {
@@ -416,7 +416,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
           });
         } catch (switchErr: any) {
           if (switchErr.code === 4902) {
-            setSwapStatus({ type: 'info', msg: 'Adding Arc Testnet to MetaMask...' });
+            setSwapStatus({ type: 'info', msg: 'Adding Build on Arc to MetaMask...' });
             await eth.request({
               method: 'wallet_addEthereumChain',
               params: [ARC_CHAIN_PARAMS],
@@ -748,7 +748,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
             <div>
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Uniswap Arc Swapper Engine</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                {isSimulationMode ? 'Simulation mode is active. Execute test trades instantly!' : 'Real MetaMask transactions will deploy on Arc Testnet.'}
+                {isSimulationMode ? 'Simulation mode is active. Execute test trades instantly!' : 'Real MetaMask transactions will deploy on Build on Arc.'}
               </div>
             </div>
           </div>
@@ -1007,7 +1007,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
                   marginTop: '0.5rem',
                   marginBottom: '0.5rem'
                 }}>
-                  ⚠️ <strong>Arc Testnet Notice:</strong> Public DEX stablecoin liquidity pools are not active on the testnet. Live wallet mode will submit a MetaMask transaction, but no actual tokens will be exchanged on-chain. For a working swap demonstration, please enable <strong>Simulation Active</strong> mode above.
+                  ⚠️ <strong>Build on Arc Notice:</strong> Public DEX stablecoin liquidity pools are not active on the network. Live wallet mode will submit a MetaMask transaction, but no actual tokens will be exchanged on-chain. For a working swap demonstration, please enable <strong>Simulation Active</strong> mode above.
                 </div>
               )}
 
@@ -1611,7 +1611,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
                 color: 'var(--text-secondary)'
               }}>
                 <Layers size={48} style={{ marginBottom: '1rem', opacity: 0.5, color: '#ff007a' }} />
-                <h4>No positions found on Arc Testnet</h4>
+                <h4>No positions found on Build on Arc</h4>
                 <p style={{ fontSize: '0.85rem', margin: '0.5rem 0 1rem' }}>Get started by providing liquidity into stablecoin, FX, or RWA pairs.</p>
                 <button
                   onClick={() => setActiveTab('pools')}

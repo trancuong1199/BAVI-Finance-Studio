@@ -121,7 +121,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
     const name = customName || agentName;
     const uri = customUri || agentUri;
     setAgentRegistering(true);
-    appendLog("Initiating ERC-8004 Agent Registration on Arc Testnet...");
+    appendLog("Initiating ERC-8004 Agent Registration on Build on Arc...");
     appendLog(`  Agent Name: ${name}`);
     appendLog(`  Identity Registry URI: ${uri}`);
 
@@ -136,7 +136,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
       const receipt = await tx.wait();
 
       setAgentIdentityRegistered(true);
-      appendLog(`\n[ERC-8004 SUCCESS] Agent Registered on Arc Testnet!`);
+      appendLog(`\n[ERC-8004 SUCCESS] Agent Registered on Build on Arc!`);
       appendLog(`  Registry Tx: ${receipt.hash}`);
       appendLog(`  Agent Owner Key: ${connectedAccount}`);
 
@@ -183,7 +183,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
 
       // 1. Create Job
       const expiredAt = Math.floor(Date.now() / 1000) + 3600 * 24; // 1 day from now
-      appendLog("Creating job on Arc Testnet...");
+      appendLog("Creating job on Build on Arc...");
       const createTx = await contract.createJob(
         providerVal,
         connectedAccount, // Evaluator is the client for this demo
@@ -362,7 +362,7 @@ export const AgenticJobs: React.FC<AgenticJobsProps> = ({ connectedAccount, getP
               🛡️ ERC-8004 Agent Identity
             </h3>
             <p style={{ color: '#9ca3af', fontSize: '0.8rem', marginBottom: '1rem' }}>
-              Bind autonomous capabilities and metadata to a verified identity on Arc Testnet.
+              Bind autonomous capabilities and metadata to a verified identity on Build on Arc.
             </p>
 
             {agentIdentityRegistered ? (

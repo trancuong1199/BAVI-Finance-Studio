@@ -9,7 +9,7 @@ declare global {
 
 export const ARC_TESTNET_CONFIG = {
   chainId: "0x4cef52", // 5042002 in hex
-  chainName: "Arc Testnet",
+  chainName: "Build on Arc",
   rpcUrls: ["https://rpc.testnet.arc.network"],
   nativeCurrency: {
     name: "USDC",
@@ -20,7 +20,7 @@ export const ARC_TESTNET_CONFIG = {
 };
 
 export const SUPPORTED_CHAINS = [
-  { name: "Arc Testnet", id: "Arc_Testnet", chainIdHex: "0x4cef52", isArc: true },
+  { name: "Build on Arc", id: "Arc_Testnet", chainIdHex: "0x4cef52", isArc: true },
   { name: "Base Sepolia", id: "Base_Sepolia", chainIdHex: "0x14a34", isArc: false },
   { name: "Arbitrum Sepolia", id: "Arbitrum_Sepolia", chainIdHex: "0x66eee", isArc: false },
   { name: "Avalanche Fuji", id: "Avalanche_Fuji", chainIdHex: "0x2a", isArc: false },
@@ -57,7 +57,7 @@ export async function switchOrAddArcNetwork(provider?: any): Promise<boolean> {
       });
       return true;
     } catch (addError) {
-      console.error("Error adding Arc Testnet network", addError);
+      console.error("Error adding Build on Arc network", addError);
       return false;
     }
   }

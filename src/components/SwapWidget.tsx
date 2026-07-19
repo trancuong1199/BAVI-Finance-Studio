@@ -15,13 +15,13 @@ export const SwapWidget = () => {
         borderRadiusSecondary: 12,
       },
     },
-    integrator: 'ARC-Swap-Demo',
+    integrator: 'BAVI-Swap-Demo',
   };
 
   return (
     <div className="widget-container glass-panel animate-fade-in delay-100">
       <div className="widget-wrapper">
-        <LiFiWidget integrator="ARC-Swap-Demo" config={widgetConfig} />
+        <LiFiWidget integrator="BAVI-Swap-Demo" config={widgetConfig} />
       </div>
     </div>
   );

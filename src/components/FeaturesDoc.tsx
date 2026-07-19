@@ -7,10 +7,10 @@ export const FeaturesDoc: React.FC = () => {
       <div className="glass-panel" style={{ marginBottom: '2rem', padding: '2rem' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '2rem', marginBottom: '1rem', color: 'var(--brand-primary)' }}>
           <Activity size={36} />
-          ARC Finance Studio Features
+          BAVI Finance Studio Features
         </h1>
         <p style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>
-          Welcome to ARC Finance Studio! This documentation provides an overview of all the features available in our platform, including the latest ARC protocol capabilities.
+          Welcome to BAVI Finance Studio! This documentation provides an overview of all the features available in our platform, including the latest ARC protocol capabilities.
         </p>
       </div>
 
@@ -150,7 +150,7 @@ export const FeaturesDoc: React.FC = () => {
             <h3 style={{ margin: 0 }}>Testnet Faucet</h3>
           </div>
           <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Get started on the Arc Testnet without spending real money. Request free test tokens directly to your wallet to try out swaps, payments, and smart contracts risk-free.
+            Get started on Build on Arc without spending real money. Request free test tokens directly to your wallet to try out swaps, payments, and smart contracts risk-free.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export const FeaturesDoc: React.FC = () => {
           <div>
             <h2 style={{ fontSize: '1.5rem', margin: '0 0 0.5rem 0' }}>Multi-Wallet Support</h2>
             <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-              ARC Finance Studio seamlessly connects with your favorite Web3 wallets. We support the latest EIP-6963 standard, which automatically detects all installed wallets (like MetaMask, OKX, Phantom, etc.) so you can choose exactly which one to connect with.
+              BAVI Finance Studio seamlessly connects with your favorite Web3 wallets. We support the latest EIP-6963 standard, which automatically detects all installed wallets (like MetaMask, OKX, Phantom, etc.) so you can choose exactly which one to connect with.
             </p>
           </div>
         </div>
@@ -228,7 +228,7 @@ export const FeaturesDoc: React.FC = () => {
                 <ExternalLink size={16} /> Unified Balance Kit: Production Safeguards & Recovery Patterns
               </a>
               <a href="https://community.arc.io/home/blogs/what-vypers-arc-testnet-work-opens-up-for-builders-of-agentic-financial-workflows-2026-06-26" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ExternalLink size={16} /> What Vyper's Arc Testnet Work Opens Up for Builders
+                <ExternalLink size={16} /> What Vyper's Build on Arc Work Opens Up for Builders
               </a>
               <a href="https://docs.arc.io/arc-chain" target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <ExternalLink size={16} /> ARC Chain Details

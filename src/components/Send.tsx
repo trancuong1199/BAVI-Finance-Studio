@@ -33,14 +33,14 @@ export const Send: React.FC<SendProps> = ({ adapter, userAddress, isMetaMask, on
     try {
       // If MetaMask is used, ensure we are on Arc Testnet first
       if (isMetaMask) {
-        setStatus({ type: "info", msg: "Switching network to Arc Testnet in MetaMask..." });
+        setStatus({ type: "info", msg: "Switching network to Build on Arc in MetaMask..." });
         const switched = await switchOrAddArcNetwork();
         if (!switched) {
-          throw new Error("Failed to switch to Arc Testnet network in MetaMask.");
+          throw new Error("Failed to switch to Build on Arc network in MetaMask.");
         }
       }
 
-      setStatus({ type: "info", msg: "Broadcasting send transaction on Arc Testnet..." });
+      setStatus({ type: "info", msg: "Broadcasting send transaction on Build on Arc..." });
       
       const kit = new AppKit();
       
@@ -59,7 +59,7 @@ export const Send: React.FC<SendProps> = ({ adapter, userAddress, isMetaMask, on
       
       setStatus({
         type: "success",
-        msg: `Successfully transferred ${amount} ${token} on Arc Testnet!`,
+        msg: `Successfully transferred ${amount} ${token} on Build on Arc!`,
         txHash: (result as any).txHash || (result as any).transactionHash || (result as any).id || (typeof result === "string" ? result : undefined),
       });
       
@@ -90,7 +90,7 @@ export const Send: React.FC<SendProps> = ({ adapter, userAddress, isMetaMask, on
           </svg>
           Send Tokens
         </h2>
-        <p>Transfer stablecoins between wallets on the same blockchain (Arc Testnet).</p>
+        <p>Transfer stablecoins between wallets on the same blockchain (Build on Arc).</p>
       </div>
 
       <form onSubmit={handleSend}>

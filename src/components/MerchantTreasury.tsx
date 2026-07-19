@@ -916,7 +916,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           fontSize: '0.95rem',
           gap: '1.5rem'
         }}>
-          <span>⚠️ Your wallet is connected to a different network. Please switch to Arc Testnet to view balances and make transactions.</span>
+          <span>⚠️ Your wallet is connected to a different network. Please switch to Build on Arc to view balances and make transactions.</span>
           <button
             onClick={async () => {
               if (walletProvider) {
@@ -937,7 +937,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               whiteSpace: 'nowrap'
             }}
           >
-            Switch to Arc Testnet
+            Switch to Build on Arc
           </button>
         </div>
       )}

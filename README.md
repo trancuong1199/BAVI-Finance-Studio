@@ -1,6 +1,6 @@
-# 🚀 ARC Finance Studio
+# 🚀 BAVI Finance Studio
 
-ARC Finance Studio is a comprehensive, production-ready DeFi & Agentic Commerce platform built natively on **Arc**—Circle's stablecoin-native Layer-1 network. Arc uses USDC as the native gas token, offers sub-second transaction finality, and natively integrates Circle’s complete suite of developer tools.
+BAVI Finance Studio is a comprehensive, production-ready DeFi & Agentic Commerce platform built natively on **Arc**—Circle's stablecoin-native Layer-1 network. Arc uses USDC as the native gas token, offers sub-second transaction finality, and natively integrates Circle’s complete suite of developer tools.
 
 This project is submitted for the **Build on Arc Hackathon**, addressing both the **DeFi Track** and the **Agentic Economy Track** by showing the capabilities of USDC-denominated transaction flows, CCTP bridges, Uniswap portals, and autonomous agent-to-agent escrows.
 
@@ -27,9 +27,9 @@ A secure escrow framework for autonomous AI agent commerce:
 
 ---
 
-## 🏺 Deployed Contract Addresses (Arc Testnet)
+## 🏺 Deployed Contract Addresses (Build on Arc)
 
-The following custom solidity contracts are deployed using **Circle's Developer-Controlled Programmable Wallets** on Arc Testnet:
+The following custom solidity contracts are deployed using **Circle's Developer-Controlled Programmable Wallets** on Build on Arc:
 
 | Contract | Purpose | Deployed Address | Deployment Transaction Hash |
 | :--- | :--- | :--- | :--- |
@@ -105,7 +105,7 @@ The following custom solidity contracts are deployed using **Circle's Developer-
     ```bash
     node scripts/deploy-vault-scp.mjs
     ```
-    Triggers Circle SCP API calls to deploy vaults on Arc Testnet.
+    Triggers Circle SCP API calls to deploy vaults on Build on Arc.
 *   **Verify Deployments**:
     ```bash
     node scripts/verify-deployed.mjs

@@ -52,7 +52,7 @@ const ROUTER_INTERFACE = new Interface([
 const ARC_CHAIN_ID = '0x4CEF52'; // 5042002 in hex
 const ARC_CHAIN_PARAMS = {
   chainId: ARC_CHAIN_ID,
-  chainName: 'Arc Testnet',
+  chainName: 'Build on Arc',
   nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
   rpcUrls: ['https://rpc.testnet.arc.network'],
   blockExplorerUrls: ['https://testnet.arcscan.app'],
@@ -259,7 +259,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
       const from = connectedAccount;
 
       // Step 1: Switch to Arc Testnet
-      setStatusMsg('🔄 Switching to Arc Testnet...');
+      setStatusMsg('🔄 Switching to Build on Arc...');
       try {
         await eth.request({
           method: 'wallet_switchEthereumChain',
@@ -267,7 +267,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
         });
       } catch (switchErr: any) {
         if (switchErr.code === 4902) {
-          setStatusMsg('➕ Adding Arc Testnet to MetaMask...');
+          setStatusMsg('➕ Adding Build on Arc to MetaMask...');
           await eth.request({
             method: 'wallet_addEthereumChain',
             params: [ARC_CHAIN_PARAMS],
@@ -366,7 +366,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
             }],
           });
 
-          setStatusMsg('✅ Swap transaction submitted on Arc Testnet!');
+          setStatusMsg('✅ Swap transaction submitted on Build on Arc!');
 
         } else {
           // EURC (ERC-20, 6 decimals) -> USDC (native gas, 18 decimals)
@@ -444,7 +444,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               }],
             });
 
-            setStatusMsg('✅ Unwrap transaction submitted on Arc Testnet!');
+            setStatusMsg('✅ Unwrap transaction submitted on Build on Arc!');
             txHash = withdrawTx;
           } else {
             setStatusMsg('✅ Swap complete! (No WUSDC balance to unwrap)');
@@ -508,7 +508,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
           fontSize: '0.85rem',
           gap: '1rem'
         }}>
-          <span>⚠️ Wallet is connected to a different network. Switch to Arc Testnet to view balances.</span>
+          <span>⚠️ Wallet is connected to a different network. Switch to Build on Arc to view balances.</span>
           <button
             onClick={async () => {
               const eth = getProvider();

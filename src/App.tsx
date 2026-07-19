@@ -70,7 +70,7 @@ function App() {
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'user' | 'agent'; text: string; time: string; logs?: string }>>([
     {
       sender: 'agent',
-      text: 'Hello! I am ArcAgent Coordinator. I can help you automate actions on the Arc Testnet:\n\n1. 🔄 Swap (e.g. "Swap 1 USDC to EURC")\n2. 🏺 Vault Deposit (e.g. "Deposit 2 USDC to Vault")\n3. 💼 Create Escrow Job ERC-8183 (e.g. "Hire agent to audit for 3 USDC")\n4. 🌉 Bridge CCTP (e.g. "Open bridge page")\n5. 🧭 Switch Tab (e.g. "Go to Faucet")\n\nDescribe your request or choose a quick suggestion below!',
+      text: 'Hello! I am BaviAgent Coordinator. I can help you automate actions on Build on Arc:\n\n1. 🔄 Swap (e.g. "Swap 1 USDC to EURC")\n2. 🏺 Vault Deposit (e.g. "Deposit 2 USDC to Vault")\n3. 💼 Create Escrow Job ERC-8183 (e.g. "Hire agent to audit for 3 USDC")\n4. 🌉 Bridge CCTP (e.g. "Open bridge page")\n5. 🧭 Switch Tab (e.g. "Go to Faucet")\n\nDescribe your request or choose a quick suggestion below!',
       time: new Date().toLocaleTimeString()
     }
   ]);
@@ -80,9 +80,9 @@ function App() {
   const [apiKeyInput, setApiKeyInput] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
 
   const GEMINI_SYSTEM_PROMPT = `
-You are ArcAgent Coordinator, a helpful AI assistant for the Arc Layer 1 Testnet (a stablecoin-native EVM L1 by Circle).
+You are BaviAgent Coordinator, a helpful AI assistant for the Arc Layer 1 Testnet (a stablecoin-native EVM L1 by Circle).
 Analyze the user's input. You must reply in natural language. If the user wants to execute a Web3 action, you must also provide structured command parameters so the frontend can execute it.
-Arc Testnet details:
+Build on Arc details:
 - Supported tokens: USDC, EURC, cirBTC.
 - Supported actions: 
   1. swap (parameters: amount, fromToken, toToken)
@@ -330,7 +330,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
       const userAddr = await signer.getAddress();
       const contract = new ethers.Contract(AGENTIC_COMMERCE_CONTRACT, agenticCommerceAbi, signer);
 
-      addAgentMessage("💼 [Escrow - 1/3] Submitting Job creation & budget configuration to Arc Testnet... Please confirm in MetaMask.");
+      addAgentMessage("💼 [Escrow - 1/3] Submitting Job creation & budget configuration to Build on Arc... Please confirm in MetaMask.");
       const expiredAt = Math.floor(Date.now() / 1000) + 3600 * 24;
       const createTx = await contract.createJob(userAddr, userAddr, expiredAt, desc, "0x0000000000000000000000000000000000000000");
       const receipt = await createTx.wait();
@@ -516,7 +516,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
 
       // Greeting handler
       if (lower.includes("hello") || lower.includes("hi") || lower.includes("chào") || lower.includes("hey") || lower.includes("xin chào")) {
-        addAgentMessage("👋 Hello! I am your autonomous Web3 assistant on Arc Testnet. How can I help you today?\n\nYou can ask me to:\n• Swap tokens (e.g. \"Swap 1 USDC to EURC\")\n• Deposit to vaults (e.g. \"Deposit 2 USDC to Vault\")\n• Transfer funds (e.g. \"Send 5 USDC to 0x...\")\n• Create escrow jobs (e.g. \"Create escrow job 3 USDC\")\n• Switch pages (e.g. \"Go to Bridge\")");
+        addAgentMessage("👋 Hello! I am your autonomous Web3 assistant on Build on Arc. How can I help you today?\n\nYou can ask me to:\n• Swap tokens (e.g. \"Swap 1 USDC to EURC\")\n• Deposit to vaults (e.g. \"Deposit 2 USDC to Vault\")\n• Transfer funds (e.g. \"Send 5 USDC to 0x...\")\n• Create escrow jobs (e.g. \"Create escrow job 3 USDC\")\n• Switch pages (e.g. \"Go to Bridge\")");
         setChatExecuting(false);
         return;
       }
@@ -793,7 +793,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
         <div className="mobile-header">
           <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
             <Activity color="#3b82f6" />
-            ARC Studio
+            BAVI Studio
           </div>
           <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
             <Menu size={24} color="#f8fafc" />
@@ -807,7 +807,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
         <aside className={`sidebar animate-fade-in ${isMobileMenuOpen ? 'open' : ''}`}>
           <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
             <Activity color="#3b82f6" />
-            ARC Finance Studio
+            BAVI Finance Studio
           </div>
 
           <div className="nav-links">
@@ -865,7 +865,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
           <div className="header-controls">
             <div className="status-pulse" style={{ borderRadius: '24px', cursor: 'default', width: 'fit-content' }}>
               <div className="pulse-dot"></div>
-              Arc Testnet
+              Build on Arc
             </div>
 
             <button onClick={() => connectWallet()} className="wallet-button" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '24px', width: 'fit-content' }}>
@@ -1172,7 +1172,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
                     <Bot size={24} color="#60a5fa" />
                   </div>
                   <div>
-                    <h4 style={{ color: '#fff', margin: 0, fontSize: '1.05rem', fontWeight: 600, letterSpacing: '0.3px' }}>ArcAgent Coordinator</h4>
+                    <h4 style={{ color: '#fff', margin: 0, fontSize: '1.05rem', fontWeight: 600, letterSpacing: '0.3px' }}>BaviAgent Coordinator</h4>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', color: '#10b981', marginTop: '2px' }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', position: 'relative' }}></span>
                       {apiKeyInput ? 'AI Mode Active' : 'Online & Autonomous'}
