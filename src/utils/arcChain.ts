@@ -1,5 +1,9 @@
 import { createViemAdapterFromProvider, createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
 import { AppKit } from "@circle-fin/app-kit";
+import { JsonRpcProvider } from "ethers";
+
+export const globalRpcProvider = new JsonRpcProvider("https://rpc.testnet.arc.network", undefined, { staticNetwork: true });
+
 
 declare global {
   interface Window {

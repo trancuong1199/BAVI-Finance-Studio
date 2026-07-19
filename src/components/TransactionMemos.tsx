@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Tag, Hash, Send, CheckCircle2, AlertCircle, ExternalLink, Info, Copy, RefreshCw } from 'lucide-react';
-import { BrowserProvider, parseUnits, Interface, id, toUtf8Bytes, getBytes, JsonRpcProvider, Contract, formatUnits } from 'ethers';
+import { BrowserProvider, parseUnits, Interface, id, toUtf8Bytes, getBytes, Contract, formatUnits } from 'ethers';
 import { saveTransaction } from '../lib/TransactionHistory';
+import { globalRpcProvider } from '../utils/arcChain';
 
 const MEMO_CONTRACT_ADDRESS = '0x5294E9927c3306DcBaDb03fe70b92e01cCede505';
 const USDC_ERC20_ADDRESS = '0x3600000000000000000000000000000000000000';
@@ -152,7 +153,7 @@ export const TransactionMemos: React.FC<TransactionMemosProps> = ({ walletProvid
     if (!address) return;
     setIsFetchingBalance(true);
     try {
-      const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+      const provider = globalRpcProvider;
       const usdcContract = new Contract(
         USDC_ERC20_ADDRESS,
         ["function balanceOf(address account) view returns (uint256)"],
@@ -243,7 +244,7 @@ export const TransactionMemos: React.FC<TransactionMemosProps> = ({ walletProvid
 
       let currentBalance = usdcBalance;
       try {
-        const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        const provider = globalRpcProvider;
         const usdcContract = new Contract(
           USDC_ERC20_ADDRESS,
           ["function balanceOf(address account) view returns (uint256)"],

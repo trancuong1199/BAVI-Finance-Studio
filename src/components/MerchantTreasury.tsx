@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink } from 'lucide-react';
-import { BrowserProvider, parseUnits, formatUnits, Contract, JsonRpcProvider } from 'ethers';
+import { BrowserProvider, parseUnits, formatUnits, Contract } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
 import { saveTransaction } from '../lib/TransactionHistory';
-import { switchOrAddArcNetwork } from '../utils/arcChain';
+import { switchOrAddArcNetwork, globalRpcProvider } from '../utils/arcChain';
 
 interface MerchantTreasuryProps {
   connectedAccount: string | null;
@@ -412,21 +412,15 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
     setHistoryLoading(true);
     try {
-      let provider;
+      let provider = globalRpcProvider;
       try {
         if (walletProvider) {
           const chainId = await walletProvider.request({ method: 'eth_chainId' });
           if (chainId && chainId.toLowerCase() === '0x4cef52') {
-            provider = new BrowserProvider(walletProvider);
-          } else {
-            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+            provider = new BrowserProvider(walletProvider) as any;
           }
-        } else {
-          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
         }
-      } catch (e) {
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      }
+      } catch (e) { }
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 
@@ -600,21 +594,15 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
 
     try {
-      let provider;
+      let provider = globalRpcProvider;
       try {
         if (walletProvider) {
           const chainId = await walletProvider.request({ method: 'eth_chainId' });
           if (chainId && chainId.toLowerCase() === '0x4cef52') {
-            provider = new BrowserProvider(walletProvider);
-          } else {
-            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+            provider = new BrowserProvider(walletProvider) as any;
           }
-        } else {
-          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
         }
-      } catch (e) {
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      }
+      } catch (e) { }
 
       const contract = new Contract(deployedContractAddress, MerchantTreasuryArtifact.abi, provider);
 

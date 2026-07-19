@@ -3,8 +3,8 @@ import { ArrowUpDown, RefreshCw } from 'lucide-react';
 import { AgenticJobs } from './AgenticJobs';
 import { CircleIntegration } from './CircleIntegration';
 import { saveTransaction } from '../lib/TransactionHistory';
-import { JsonRpcProvider, BrowserProvider, Contract, formatUnits, Interface } from 'ethers';
-import { switchOrAddArcNetwork } from '../utils/arcChain';
+import { BrowserProvider, Contract, formatUnits, Interface } from 'ethers';
+import { switchOrAddArcNetwork, globalRpcProvider } from '../utils/arcChain';
 
 const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
 const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
@@ -115,21 +115,15 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
   const fetchExchangeRate = async () => {
     try {
       const eth = getProvider();
-      let provider;
+      let provider = globalRpcProvider;
       try {
         if (eth) {
           const chainId = await eth.request({ method: 'eth_chainId' });
           if (chainId && chainId.toLowerCase() === ARC_CHAIN_ID.toLowerCase()) {
-            provider = new BrowserProvider(eth);
-          } else {
-            provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+            provider = new BrowserProvider(eth) as any;
           }
-        } else {
-          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
         }
-      } catch (e) {
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-      }
+      } catch (e) { }
 
       const pool = new Contract(
         '0xe8f7fA2A412e98C537554643F83DA34DfdD50c23',
@@ -159,22 +153,16 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
     let eurcVal = balances.eurc;
     
     const eth = getProvider();
-    let provider;
+    let provider = globalRpcProvider;
     
     try {
       if (eth) {
         const chainId = await eth.request({ method: 'eth_chainId' });
         if (chainId && chainId.toLowerCase() === ARC_CHAIN_ID.toLowerCase()) {
-          provider = new BrowserProvider(eth);
-        } else {
-          provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+          provider = new BrowserProvider(eth) as any;
         }
-      } else {
-        provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
       }
-    } catch (e) {
-      provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-    }
+    } catch (e) { }
 
     // Fetch USDC balance independently
     try {
@@ -184,8 +172,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
       console.warn("Failed to fetch native USDC balance:", e);
       // Fallback
       try {
-        const fallbackProvider = new JsonRpcProvider('https://rpc.testnet.arc.network');
-        const nativeBalance = await fallbackProvider.getBalance(connectedAccount);
+        const nativeBalance = await globalRpcProvider.getBalance(connectedAccount);
         usdcVal = parseFloat(formatUnits(nativeBalance, 18)).toFixed(4);
       } catch (err) {
         console.warn("USDC fallback query failed:", err);
@@ -205,11 +192,10 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
       console.warn("Failed to fetch EURC balance:", e);
       // Fallback
       try {
-        const fallbackProvider = new JsonRpcProvider('https://rpc.testnet.arc.network');
         const eurcContract = new Contract(
           '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a',
           ["function balanceOf(address account) view returns (uint256)"],
-          fallbackProvider
+          globalRpcProvider
         );
         const eurcBalance = await eurcContract.balanceOf(connectedAccount);
         eurcVal = parseFloat(formatUnits(eurcBalance, 6)).toFixed(4);
@@ -282,7 +268,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
         const finalRecipient = from;
 
         // --- LIVE WALLET SWAP LOGIC ---
-        const provider = new JsonRpcProvider('https://rpc.testnet.arc.network');
+        const provider = new BrowserProvider(eth);
         const valueIn = parseFloat(swapAmount);
         
         // Balance check
