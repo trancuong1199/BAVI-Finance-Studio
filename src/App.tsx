@@ -15,6 +15,7 @@ import { RightSidebar } from './components/RightSidebar';
 import { ArbitrageBot } from './components/ArbitrageBot';
 import { PresentationDeck } from './components/PresentationDeck';
 import { AgentStack } from './components/AgentStack';
+import logoImg from './assets/logo.png';
 
 // Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
 if (typeof window !== 'undefined') {
@@ -811,7 +812,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
       <BackgroundAnimation />
       <div className="mobile-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', padding: '10px 15px', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="nav-brand" onClick={() => navigateTo('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: 'none', WebkitTextFillColor: 'initial', color: 'var(--text-primary)', margin: 0, padding: 0 }}>
-          <img src="/logo.png" alt="BAVI Logo" style={{ width: '34px', height: '34px', borderRadius: '10px', objectFit: 'cover' }} />
+          <img src={logoImg} alt="BAVI Logo" style={{ width: '34px', height: '34px', borderRadius: '10px', objectFit: 'cover' }} />
           <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>BAVI Studio</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -867,7 +868,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
           >
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <img 
-                src="/logo.png" 
+                src={logoImg} 
                 alt="BAVI Logo" 
                 style={{ 
                   width: '46px', 
