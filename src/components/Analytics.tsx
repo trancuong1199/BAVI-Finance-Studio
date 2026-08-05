@@ -69,10 +69,42 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
       if (txRes.ok) {
         const d = await txRes.json();
         const items: WalletTx[] = d.items || [];
-        setWalletTxs(items);
+        
+        let merged: any[] = [...items];
+        try {
+          const { getTransactionHistory } = await import('../lib/TransactionHistory');
+          const history = getTransactionHistory();
+          const localUserTxs = history.filter(tx => 
+            tx.from?.toLowerCase() === address.toLowerCase() || 
+            tx.to?.toLowerCase() === address.toLowerCase()
+          );
+
+          const formattedLocal: WalletTx[] = localUserTxs.map(tx => ({
+            hash: tx.txHash || tx.id,
+            timestamp: new Date(tx.timestamp).toISOString(),
+            from: { hash: tx.from },
+            to: tx.to ? { hash: tx.to } : null,
+            value: tx.amount && !isNaN(parseFloat(tx.amount)) ? (parseFloat(tx.amount) * 1e18).toString() : '0',
+            status: tx.status === 'COMPLETE' ? 'ok' : 'error',
+            method: tx.action,
+            fee: { value: '10000000000000' },
+            gas_used: '21000'
+          }));
+
+          for (const lTx of formattedLocal) {
+            if (!merged.find(m => m.hash && lTx.hash && m.hash.toLowerCase() === lTx.hash.toLowerCase())) {
+              merged.push(lTx);
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to load local tx history', e);
+        }
+
+        merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setWalletTxs(merged);
 
         let gas = 0, ok = 0, fail = 0;
-        for (const tx of items) {
+        for (const tx of merged) {
           gas += parseFloat(tx.fee?.value || '0') / 1e18;
           if (tx.status === 'ok') ok++;
           else fail++;
@@ -175,38 +207,38 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
 
             {/* Volume Chart */}
-            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', padding: '1.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem', color: '#60a5fa', fontSize: '1rem' }}>Transaction Volume (USDC sent)</h4>
+            <div style={{ background: 'var(--stat-card-bg)', border: '1px solid var(--stat-card-border)', borderRadius: '14px', padding: '1.5rem', boxShadow: 'var(--shadow-card)' }}>
+              <h4 style={{ margin: '0 0 1rem', color: '#0ea5e9', fontSize: '1rem', fontWeight: 700 }}>Transaction Volume (USDC sent)</h4>
               {walletLoading ? (
-                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>Loading...</div>
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>Loading...</div>
               ) : volumeChartData.length === 0 ? (
-                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>No transactions found</div>
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No transactions found</div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
                   <AreaChart data={volumeChartData}>
                     <defs>
                       <linearGradient id="walletVol" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 11 }} minTickGap={20} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 11 }} width={60} tickFormatter={v => v.toFixed(2)} />
-                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} labelStyle={{ color: '#a1a1aa' }} itemStyle={{ color: '#60a5fa' }} formatter={(v: any) => [`${v} USDC`, 'Volume']} />
-                    <Area type="monotone" dataKey="value" stroke="#60a5fa" strokeWidth={2} fillOpacity={1} fill="url(#walletVol)" />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} minTickGap={20} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={60} tickFormatter={v => v.toFixed(2)} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }} labelStyle={{ color: 'var(--text-secondary)' }} itemStyle={{ color: '#0ea5e9' }} formatter={(v: any) => [`${v} USDC`, 'Volume']} />
+                    <Area type="monotone" dataKey="value" stroke="#0ea5e9" strokeWidth={2} fillOpacity={1} fill="url(#walletVol)" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
             </div>
 
             {/* Token Pie */}
-            <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', padding: '1.5rem' }}>
-              <h4 style={{ margin: '0 0 1rem', color: '#a78bfa', fontSize: '1rem' }}>Token Portfolio Distribution</h4>
+            <div style={{ background: 'var(--stat-card-bg)', border: '1px solid var(--stat-card-border)', borderRadius: '14px', padding: '1.5rem', boxShadow: 'var(--shadow-card)' }}>
+              <h4 style={{ margin: '0 0 1rem', color: '#8b5cf6', fontSize: '1rem', fontWeight: 700 }}>Token Portfolio Distribution</h4>
               {walletLoading ? (
-                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>Loading...</div>
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>Loading...</div>
               ) : pieData.length === 0 ? (
-                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>No token holdings</div>
+                <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No token holdings</div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', height: 220 }}>
                   <ResponsiveContainer width="55%" height="100%">
@@ -214,15 +246,15 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
                       <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={3}>
                         {pieData.map((_, i) => <Cell key={i} fill={TOKEN_COLORS[i % TOKEN_COLORS.length]} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px' }} formatter={(v: any, n: any) => [v, n]} />
+                      <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }} formatter={(v: any, n: any) => [v, n]} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1, overflowY: 'auto', maxHeight: 220 }}>
                     {pieData.map((item, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', minWidth: 0 }}>
                         <div style={{ width: 9, height: 9, borderRadius: '50%', background: TOKEN_COLORS[i % TOKEN_COLORS.length], flexShrink: 0 }} />
-                        <span style={{ color: '#e4e4e7', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{item.name}</span>
-                        <span style={{ color: '#a1a1aa', flexShrink: 0, fontFamily: 'monospace', fontSize: '0.75rem' }}>{item.value}</span>
+                        <span style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, fontWeight: 500 }}>{item.name}</span>
+                        <span style={{ color: 'var(--text-secondary)', flexShrink: 0, fontFamily: 'monospace', fontSize: '0.75rem', fontWeight: 600 }}>{item.value}</span>
                       </div>
                     ))}
                   </div>
@@ -232,29 +264,29 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
           </div>
 
           {/* Transaction Table */}
-          <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: '14px', overflow: 'hidden' }}>
-            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #27272a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', color: '#e4e4e7' }}>Recent Transactions</h4>
+          <div style={{ background: 'var(--stat-card-bg)', border: '1px solid var(--stat-card-border)', borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700 }}>Recent Transactions</h4>
               <a
                 href={`https://testnet.arcscan.app/address/${address}`}
                 target="_blank"
                 rel="noreferrer"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#60a5fa', fontSize: '0.8rem', textDecoration: 'none' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#0ea5e9', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 600 }}
               >
                 View all on ArcScan <ExternalLink size={12} />
               </a>
             </div>
             {walletLoading ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#71717a' }}>Loading transactions...</div>
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading transactions...</div>
             ) : walletTxs.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#71717a' }}>No transactions found</div>
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions found</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+                    <tr style={{ background: 'var(--bg-tertiary)' }}>
                       {['Type', 'Hash', 'From', 'To', 'Value (USDC)', 'Gas Fee', 'Time', 'Status'].map(h => (
-                        <th key={h} style={{ padding: '0.7rem 1rem', textAlign: 'left', color: '#71717a', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid #27272a' }}>{h}</th>
+                        <th key={h} style={{ padding: '0.7rem 1rem', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-color)' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -264,28 +296,28 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
                       const val = (parseFloat(tx.value || '0') / 1e18).toFixed(4);
                       const fee = (parseFloat(tx.fee?.value || '0') / 1e18).toFixed(6);
                       return (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' }} className="hover:bg-white/5">
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.15s' }}>
                           <td style={{ padding: '0.65rem 1rem' }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: isOut ? '#f87171' : '#34d399' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: isOut ? '#ef4444' : '#10b981', fontWeight: 600 }}>
                               {isOut ? <ArrowUpRight size={13} /> : <ArrowDownLeft size={13} />}
-                              {isOut ? 'OUT' : 'IN'}
+                              {tx.method ? tx.method : (isOut ? 'OUT' : 'IN')}
                             </span>
                           </td>
                           <td style={{ padding: '0.65rem 1rem' }}>
-                            <a href={`https://testnet.arcscan.app/tx/${tx.hash}`} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', textDecoration: 'none', fontFamily: 'monospace' }}>
+                            <a href={`https://testnet.arcscan.app/tx/${tx.hash}`} target="_blank" rel="noreferrer" style={{ color: '#0ea5e9', textDecoration: 'none', fontFamily: 'monospace', fontWeight: 600 }}>
                               {tx.hash.slice(0, 8)}...{tx.hash.slice(-4)}
                             </a>
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', color: '#a1a1aa', fontFamily: 'monospace' }}>{shortenAddress(tx.from?.hash || '')}</td>
-                          <td style={{ padding: '0.65rem 1rem', color: '#a1a1aa', fontFamily: 'monospace' }}>{tx.to ? shortenAddress(tx.to.hash) : '(contract)'}</td>
-                          <td style={{ padding: '0.65rem 1rem', color: '#e4e4e7', fontWeight: 600 }}>{val}</td>
-                          <td style={{ padding: '0.65rem 1rem', color: '#71717a' }}>{fee}</td>
-                          <td style={{ padding: '0.65rem 1rem', color: '#71717a', whiteSpace: 'nowrap' }}>{formatTs(tx.timestamp)}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{shortenAddress(tx.from?.hash || '')}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{tx.to ? shortenAddress(tx.to.hash) : '(contract)'}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: 'var(--text-primary)', fontWeight: 600 }}>{val}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: 'var(--text-secondary)' }}>{fee}</td>
+                          <td style={{ padding: '0.65rem 1rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatTs(tx.timestamp)}</td>
                           <td style={{ padding: '0.65rem 1rem' }}>
                             <span style={{
                               padding: '2px 8px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600,
-                              background: tx.status === 'ok' ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)',
-                              color: tx.status === 'ok' ? '#34d399' : '#f87171'
+                              background: tx.status === 'ok' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                              color: tx.status === 'ok' ? '#059669' : '#dc2626'
                             }}>
                               {tx.status === 'ok' ? 'Success' : 'Failed'}
                             </span>
@@ -308,9 +340,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ address }) => {
 // Sub-component
 // ─────────────────────────────────────────────
 const WalletStatCard = ({ label, value, loading, color }: { label: string; value: string; loading: boolean; color: string }) => (
-  <div style={{ background: '#18181b', border: `1px solid ${color}30`, borderRadius: '12px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', transition: 'all 0.2s' }}>
-    <span style={{ fontSize: '0.78rem', color: '#71717a', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-    <span style={{ fontSize: '1.2rem', fontWeight: 700, color: loading ? '#71717a' : '#e4e4e7', fontFamily: 'monospace' }}>
+  <div style={{ background: 'var(--stat-card-bg)', border: '1px solid var(--stat-card-border)', borderRadius: '12px', padding: '1.1rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', transition: 'all 0.2s', boxShadow: 'var(--shadow-card)' }}>
+    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+    <span style={{ fontSize: '1.2rem', fontWeight: 700, color: loading ? 'var(--text-muted)' : 'var(--text-primary)', fontFamily: 'monospace' }}>
       {loading ? '...' : value}
     </span>
     <div style={{ height: '3px', borderRadius: '2px', background: `${color}20`, overflow: 'hidden' }}>

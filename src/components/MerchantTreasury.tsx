@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Code, CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink } from 'lucide-react';
+import { CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink, Landmark } from 'lucide-react';
 import { BrowserProvider, parseUnits, formatUnits, Contract } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
 import { saveTransaction } from '../lib/TransactionHistory';
@@ -885,8 +885,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     <div className="page-container animate-fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title"><Code size={24} color="#a78bfa" /> Custom Circle Smart Contract</h1>
-          <p className="page-subtitle">Deploy and interact with your custom Solidity contract using Circle SCP</p>
+          <h1 className="page-title"><Landmark size={24} color="#0ea5e9" /> Smart Treasury Vaults</h1>
+          <p className="page-subtitle">Deploy and manage automated Smart Treasury Vaults on Circle Arc L1</p>
         </div>
       </div>
 
@@ -1035,14 +1035,14 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               </div>
 
               {/* Contract Preview Card */}
-              <div style={{ padding: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+              <div style={{ padding: '1rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <h4 style={{ color: '#fff', margin: 0, fontSize: '0.9rem' }}>MerchantTreasury.sol (Compiled)</h4>
-                  <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(167, 139, 250, 0.15)', color: '#c084fc', border: '1px solid rgba(167, 139, 250, 0.3)' }}>Solidity v0.8.20</span>
+                  <h4 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '0.9rem' }}>MerchantTreasury.sol (Compiled)</h4>
+                  <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(14, 165, 233, 0.15)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.3)' }}>Solidity v0.8.20</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
                   <div>
-                    <pre style={{ margin: 0, fontSize: '0.75rem', fontFamily: 'monospace', color: '#a1a1aa', maxHeight: '120px', overflowY: 'auto', background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: '6px' }}>
+                    <pre style={{ margin: 0, fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-primary)', maxHeight: '120px', overflowY: 'auto', background: 'var(--bg-input)', border: '1px solid var(--border-input)', padding: '10px', borderRadius: '8px' }}>
                       {`contract MerchantTreasury {
     address public immutable owner;
     IERC20 public immutable token; // generic ERC-20 token
@@ -1060,8 +1060,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   </div>
                   <div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', height: '100%', justifyContent: 'center' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>ABI Size: {MerchantTreasuryArtifact.abi.length} elements</div>
-                      <div style={{ fontSize: '0.75rem', color: '#a1a1aa', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Decimals: {TOKEN_CONFIGS[selectedToken].decimals} units</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ABI Size: {MerchantTreasuryArtifact.abi.length} elements</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Decimals: {TOKEN_CONFIGS[selectedToken].decimals} units</div>
                     </div>
                   </div>
                 </div>
@@ -1150,49 +1150,49 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: '#a1a1aa' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Contract Address:</span>
-                    <span style={{ fontFamily: 'monospace', color: '#fff', cursor: 'pointer' }} onClick={() => handleCopy(deployedContractAddress)}>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => handleCopy(deployedContractAddress)}>
                       {deployedContractAddress} <Copy size={12} style={{ display: 'inline', marginLeft: '4px' }} />
                     </span>
                   </div>
                   {deploymentTxHash && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Deploy Tx Hash:</span>
-                      <span style={{ fontFamily: 'monospace', color: '#fff', cursor: 'pointer' }} onClick={() => handleCopy(deploymentTxHash)}>
+                      <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => handleCopy(deploymentTxHash)}>
                         {deploymentTxHash.slice(0, 10)}...{deploymentTxHash.slice(-8)} <Copy size={12} style={{ display: 'inline', marginLeft: '4px' }} />
                       </span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>{selectedToken} Token Address:</span>
-                    <span style={{ fontFamily: 'monospace', color: '#fff' }}>{vaultUsdcAddress || usdcAddress}</span>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600 }}>{vaultUsdcAddress || usdcAddress}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>Owner (Admin):</span>
-                    <span style={{ fontFamily: 'monospace', color: '#fff' }}>{vaultOwner || ownerAddress}</span>
+                    <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 600 }}>{vaultOwner || ownerAddress}</span>
                   </div>
                   {isSimulated && (
-                    <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.8rem', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', fontSize: '0.85rem', color: '#93c5fd', lineHeight: '1.4' }}>
-                      💡 <strong>Simulation Mode Active:</strong> This contract was simulated in the browser and does not exist on the live blockchain. Real transactions on <a href="https://testnet.arcscan.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#60a5fa', textDecoration: 'underline' }}>ArcScan Explorer</a> are only generated when <strong>Live On-Chain</strong> mode is enabled with a real contract deployed.
+                    <div style={{ marginTop: '0.5rem', padding: '0.6rem 0.8rem', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', fontSize: '0.85rem', color: '#0284c7', lineHeight: '1.4', fontWeight: 500 }}>
+                      💡 <strong>Simulation Mode Active:</strong> This contract was simulated in the browser and does not exist on the live blockchain. Real transactions on <a href="https://testnet.arcscan.app/" target="_blank" rel="noopener noreferrer" style={{ color: '#0ea5e9', textDecoration: 'underline' }}>ArcScan Explorer</a> are only generated when <strong>Live On-Chain</strong> mode is enabled with a real contract deployed.
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Balance Card */}
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem' }}>
-                <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: '#a1a1aa', fontWeight: 600 }}>{selectedToken} Balance in Vault</span>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', boxShadow: 'var(--shadow-card)' }}>
+                <span style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedToken} Balance in Vault</span>
                 <span style={{ 
                   fontSize: '2.5rem', 
                   fontWeight: 700, 
-                  color: '#fff', 
+                  color: 'var(--text-primary)', 
                   fontFamily: 'Outfit, sans-serif',
                   opacity: isRefreshing ? 0.6 : 1,
                   transition: 'opacity 0.2s ease'
                 }}>
-                  {isRefreshing && vaultBalance === '0' ? 'Loading...' : vaultBalance} <span style={{ fontSize: '1.2rem', color: '#a78bfa' }}>{selectedToken}</span>
+                  {isRefreshing && vaultBalance === '0' ? 'Loading...' : vaultBalance} <span style={{ fontSize: '1.2rem', color: '#8b5cf6' }}>{selectedToken}</span>
                 </span>
               </div>
 
@@ -1200,9 +1200,9 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
                 {/* Deposit Form */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <h4 style={{ margin: '0 0 1rem', color: '#fff', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <Send size={16} color="#c084fc" /> Deposit {selectedToken}
+                <div style={{ background: 'var(--bg-tertiary)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ margin: '0 0 1rem', color: 'var(--text-primary)', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}>
+                    <Send size={16} color="#8b5cf6" /> Deposit {selectedToken}
                   </h4>
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', width: '100%' }}>
                     <input
@@ -1217,30 +1217,30 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                       onClick={handleDeposit}
                       disabled={loading || !depositAmount}
                       className="kit-action-btn"
-                      style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', width: 'auto', whiteSpace: 'nowrap', padding: '0.75rem 1.5rem', marginTop: 0 }}
+                      style={{ background: 'linear-gradient(135deg, #0ea5e9, #0d9488)', width: 'auto', whiteSpace: 'nowrap', padding: '0.75rem 1.5rem', marginTop: 0 }}
                     >
                       Deposit
                     </button>
                   </div>
-                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#71717a' }}>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     * Requires MetaMask approval (Approve) and {selectedToken} transfer transaction.
                   </p>
                 </div>
 
                 {/* Withdraw Form (Owner Only) */}
-                <div style={{ background: 'rgba(255,255,255,0.01)', padding: '1.2rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', height: '100%' }}>
-                  <h4 style={{ margin: '0 0 1rem', color: '#fff', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <div style={{ background: 'var(--bg-tertiary)', padding: '1.2rem', borderRadius: '12px', border: '1px solid var(--border-color)', height: '100%' }}>
+                  <h4 style={{ margin: '0 0 1rem', color: 'var(--text-primary)', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700 }}>
                     🔓 Withdraw Funds
                   </h4>
                   <button
                     onClick={handleWithdraw}
                     disabled={loading || parseFloat(vaultBalance) <= 0}
                     className="kit-action-btn"
-                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', marginTop: 0 }}
+                    style={{ width: '100%', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.08)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.25)', marginTop: 0, fontWeight: 600 }}
                   >
                     Withdraw all funds to Owner
                   </button>
-                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#71717a', textAlign: 'center' }}>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
                     * Only the Admin/Owner wallet address has withdraw permission.
                   </p>
                 </div>

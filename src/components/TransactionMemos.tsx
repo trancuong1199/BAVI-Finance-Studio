@@ -401,14 +401,16 @@ export const TransactionMemos: React.FC<TransactionMemosProps> = ({ walletProvid
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    padding: '0.6rem 0.85rem',
-    borderRadius: '8px',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.12)',
+    padding: '0.65rem 0.85rem',
+    borderRadius: '10px',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-input)',
     color: 'var(--text-primary)',
     fontSize: '1rem',
+    fontWeight: 500,
     boxSizing: 'border-box',
     outline: 'none',
+    transition: 'all 0.2s ease',
   };
 
   const labelStyle: React.CSSProperties = {
@@ -431,9 +433,9 @@ export const TransactionMemos: React.FC<TransactionMemosProps> = ({ walletProvid
               <FileText size={20} color="white" />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.325rem', color: 'var(--text-primary)' }}>Transaction Memos</h2>
+              <h2 style={{ margin: 0, fontSize: '1.325rem', color: 'var(--text-primary)' }}>On-Chain Invoicing & Receipts</h2>
               <p style={{ margin: '0.15rem 0 0', fontSize: '0.95rem', color: 'var(--text-secondary)' }}>
-                Attach structured metadata to USDC transactions on Arc
+                Attach structured invoice codes, payment references, and compliance audit notes to USDC transactions on Arc
               </p>
             </div>
           </div>
@@ -699,23 +701,25 @@ export const TransactionMemos: React.FC<TransactionMemosProps> = ({ walletProvid
               <Hash size={14} /> Memo Preview (JSON)
             </h4>
             <pre style={{
-              background: 'rgba(0,0,0,0.3)',
-              borderRadius: '8px',
-              padding: '0.85rem',
+              background: 'var(--code-bg)',
+              borderRadius: '10px',
+              padding: '0.85rem 1rem',
               fontSize: '0.885rem',
-              fontFamily: '"Fira Code", monospace',
-              color: '#a5f3fc',
+              fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+              color: 'var(--code-text)',
               overflowX: 'auto',
               margin: 0,
               minHeight: '110px',
-              border: '1px solid rgba(255,255,255,0.07)',
+              border: '1px solid var(--code-border)',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-all',
+              lineHeight: '1.5',
+              boxShadow: 'var(--shadow-card)'
             }}>
               {getMemoPreview()}
             </pre>
             <div style={{ marginTop: '0.5rem', fontSize: '0.855rem', color: 'var(--text-secondary)' }}>
-              Encoded as <code style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.25)', padding: '0 3px', borderRadius: '3px' }}>UTF-8 hex</code> in transaction <code style={{ fontFamily: 'monospace', background: 'rgba(0,0,0,0.25)', padding: '0 3px', borderRadius: '3px' }}>data</code> field
+              Encoded as <code style={{ fontFamily: 'monospace', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', padding: '1px 5px', borderRadius: '4px', color: 'var(--text-primary)' }}>UTF-8 hex</code> in transaction <code style={{ fontFamily: 'monospace', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', padding: '1px 5px', borderRadius: '4px', color: 'var(--text-primary)' }}>data</code> field
             </div>
           </div>
 

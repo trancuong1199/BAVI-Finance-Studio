@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpDown, RefreshCw } from 'lucide-react';
-import { AgenticJobs } from './AgenticJobs';
-import { CircleIntegration } from './CircleIntegration';
 import { saveTransaction } from '../lib/TransactionHistory';
 import { BrowserProvider, Contract, formatUnits, Interface } from 'ethers';
 import { switchOrAddArcNetwork, globalRpcProvider } from '../utils/arcChain';
@@ -64,7 +62,7 @@ interface ArcAppKitProps {
 }
 
 export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvider }) => {
-  const [activeTab, setActiveTab] = useState<'swap' | 'jobs' | 'circle'>('swap');
+  const activeTab = 'swap';
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [swapAmount, setSwapAmount] = useState('1.00');
@@ -520,34 +518,8 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
           </button>
         </div>
       )}
-      <div className="app-kit-tabs">
-        <button
-          className={`app-kit-tab ${activeTab === 'swap' ? 'active' : ''}`}
-          onClick={() => setActiveTab('swap')}
-        >
-          Swap natively
-        </button>
-        <button
-          className={`app-kit-tab ${activeTab === 'jobs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('jobs')}
-        >
-          Agentic Jobs
-        </button>
-        <button
-          className={`app-kit-tab ${activeTab === 'circle' ? 'active' : ''}`}
-          onClick={() => setActiveTab('circle')}
-        >
-          Circle AppKit
-        </button>
-      </div>
-
       <div className="app-kit-content">
-        {activeTab === 'jobs' ? (
-          <AgenticJobs connectedAccount={connectedAccount} getProvider={getProvider} />
-        ) : activeTab === 'circle' ? (
-          <CircleIntegration connectedAccount={connectedAccount} getProvider={getProvider} />
-        ) : (
-          <>
+        <>
             {/* Wallet indicator — read-only, controlled from header */}
             <div className="wallet-status-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {connectedAccount ? (
@@ -589,29 +561,30 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.8rem',
-                color: 'rgba(255,255,255,0.55)',
+                fontSize: '0.825rem',
+                color: 'var(--text-secondary)',
                 marginBottom: '0.75rem',
-                padding: '0 0.2rem'
+                padding: '0 0.2rem',
+                fontWeight: 500
               }}>
-                <span>USDC Balance: <strong style={{ color: '#fff' }}>{displayUsdc} USDC</strong></span>
-                <span>EURC Balance: <strong style={{ color: '#fff' }}>{displayEurc} EURC</strong></span>
+                <span>USDC Balance: <strong style={{ color: 'var(--text-primary)' }}>{displayUsdc} USDC</strong></span>
+                <span>EURC Balance: <strong style={{ color: 'var(--text-primary)' }}>{displayEurc} EURC</strong></span>
               </div>
             )}
 
             {/* Input Amount / Token In */}
             <div className="input-group">
-              <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <label className="input-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Amount (Pay {activeTab === 'swap' ? tokenInLabel : 'USDC'})</span>
                 {activeTab === 'swap' && connectedAccount && (
                   <button
                     type="button"
                     onClick={() => setSwapAmount(isReversed ? displayEurc : displayUsdc)}
                     style={{
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      background: 'rgba(14, 165, 233, 0.1)',
+                      border: '1px solid rgba(14, 165, 233, 0.25)',
                       borderRadius: '6px',
-                      color: '#60a5fa',
+                      color: '#0ea5e9',
                       fontSize: '0.75rem',
                       padding: '2px 8px',
                       cursor: 'pointer',
@@ -620,12 +593,12 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                       userSelect: 'none'
                     }}
                     onMouseOver={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)';
-                      e.currentTarget.style.color = '#fff';
+                      e.currentTarget.style.background = '#0ea5e9';
+                      e.currentTarget.style.color = '#ffffff';
                     }}
                     onMouseOut={(e) => {
-                      e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-                      e.currentTarget.style.color = '#60a5fa';
+                      e.currentTarget.style.background = 'rgba(14, 165, 233, 0.1)';
+                      e.currentTarget.style.color = '#0ea5e9';
                     }}
                   >
                     Max: {isReversed ? displayEurc : displayUsdc}
@@ -640,7 +613,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                   value={swapAmount}
                   onChange={(e) => setSwapAmount(e.target.value)}
                   className="kit-input"
-                  style={{ paddingRight: '4.5rem' }}
+                  style={{ paddingRight: '5.5rem' }}
                   disabled={isProcessing}
                 />
                 <span style={{
@@ -648,9 +621,12 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                   right: '12px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  fontWeight: 600,
-                  color: 'var(--color-primary)',
-                  fontSize: '0.9rem'
+                  fontWeight: 700,
+                  color: '#0ea5e9',
+                  backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                  padding: '3px 10px',
+                  borderRadius: '8px',
+                  fontSize: '0.85rem'
                 }}>{activeTab === 'swap' ? tokenInLabel : 'USDC'}</span>
               </div>
             </div>
@@ -664,8 +640,8 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                   title="Switch direction"
                   type="button"
                   style={{
-                    background: '#1e293b',
-                    border: '2px solid #3b82f6',
+                    background: 'var(--bg-card)',
+                    border: '2px solid var(--border-color)',
                     borderRadius: '50%',
                     width: '42px',
                     height: '42px',
@@ -673,21 +649,23 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    color: '#60a5fa',
-                    boxShadow: '0 0 10px rgba(59, 130, 246, 0.4)',
-                    transition: 'all 0.2s',
+                    color: '#0ea5e9',
+                    boxShadow: '0 4px 12px rgba(14, 165, 233, 0.15)',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                     zIndex: 10,
                     padding: 0
                   }}
                   onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                    e.currentTarget.style.color = '#fff';
-                    e.currentTarget.style.borderColor = '#60a5fa';
+                    e.currentTarget.style.transform = 'rotate(180deg) scale(1.1)';
+                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.background = '#0ea5e9';
+                    e.currentTarget.style.borderColor = '#0ea5e9';
                   }}
                   onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.color = '#60a5fa';
-                    e.currentTarget.style.borderColor = '#3b82f6';
+                    e.currentTarget.style.transform = 'rotate(0deg) scale(1)';
+                    e.currentTarget.style.color = '#0ea5e9';
+                    e.currentTarget.style.background = 'var(--bg-card)';
+                    e.currentTarget.style.borderColor = 'var(--border-color)';
                   }}
                 >
                   <ArrowUpDown size={18} />
@@ -704,7 +682,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                     type="text"
                     value={receiveAmount}
                     className="kit-input"
-                    style={{ paddingRight: '4.5rem', background: 'rgba(0,0,0,0.15)', cursor: 'not-allowed' }}
+                    style={{ paddingRight: '5.5rem', cursor: 'not-allowed' }}
                     readOnly
                   />
                   <span style={{
@@ -712,9 +690,12 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
                     right: '12px',
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    fontWeight: 600,
-                    color: 'var(--color-secondary)',
-                    fontSize: '0.9rem'
+                    fontWeight: 700,
+                    color: '#0d9488',
+                    backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                    padding: '3px 10px',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem'
                   }}>{tokenOutLabel}</span>
                 </div>
               </div>
@@ -736,14 +717,15 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.8rem',
-                color: 'rgba(255,255,255,0.45)',
+                fontSize: '0.825rem',
+                color: 'var(--text-secondary)',
                 marginTop: '0.5rem',
                 marginBottom: '1rem',
-                padding: '0 0.2rem'
+                padding: '0 0.2rem',
+                fontWeight: 500
               }}>
                 <span>Exchange Rate:</span>
-                <span>1 {tokenInLabel} ≈ {exchangeRate.toFixed(4)} {tokenOutLabel}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>1 {tokenInLabel} ≈ {exchangeRate.toFixed(4)} {tokenOutLabel}</span>
               </div>
             )}
 
@@ -789,7 +771,6 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
               </div>
             )}
           </>
-        )}
       </div>
     </div>
   );

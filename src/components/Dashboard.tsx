@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { RefreshCw, Send, FileText, Code, BarChart3, LayoutGrid, Presentation } from 'lucide-react';
+import { RefreshCw, Send, FileText, Landmark, BarChart3, LayoutGrid, Bot } from 'lucide-react';
 import { getTransactionHistory } from '../lib/TransactionHistory';
 import type { Transaction } from '../lib/TransactionHistory';
 
@@ -53,7 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
         
         {/* Card 1: Total Balance */}
-        <div className="glass-panel stat-card-light" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               💼 Total Balance
@@ -70,7 +70,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
         </div>
 
         {/* Card 2: 24H Volume */}
-        <div className="glass-panel stat-card-light" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               📊 24H Volume
@@ -93,7 +93,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
         </div>
 
         {/* Card 3: Total Swaps */}
-        <div className="glass-panel stat-card-light" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               🔄 Total Swaps
@@ -110,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
         </div>
 
         {/* Card 4: Success Rate */}
-        <div className="glass-panel stat-card-light" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', borderRadius: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               🎯 Success Rate
@@ -129,16 +129,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
       </div>
 
       {/* Quick Actions Panel */}
-      <div className="glass-panel" style={{ padding: '1.25rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '16px' }}>
         <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.85rem' }}>Quick Actions</h3>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           {[
             { label: 'Dashboard', icon: <LayoutGrid size={15} />, view: 'dashboard', active: true },
-            { label: 'Presentation Deck', icon: <Presentation size={15} />, view: 'presentation' },
             { label: 'Swap', icon: <RefreshCw size={15} />, view: 'swap' },
             { label: 'Send / Pay', icon: <Send size={15} />, view: 'payments' },
-            { label: 'Tx Memos', icon: <FileText size={15} />, view: 'memos' },
-            { label: 'Custom Contract', icon: <Code size={15} />, view: 'merchant-treasury' },
+            { label: 'Invoices & Receipts', icon: <FileText size={15} />, view: 'memos' },
+            { label: 'Smart Treasury', icon: <Landmark size={15} />, view: 'merchant-treasury' },
+            { label: 'AI Auto-Pay', icon: <Bot size={15} />, view: 'agent-stack' },
             { label: 'Analytics', icon: <BarChart3 size={15} />, view: 'analytics' }
           ].map((action, i) => (
             <button
@@ -150,9 +150,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
                 gap: '8px',
                 padding: '0.6rem 1.2rem',
                 borderRadius: '10px',
-                border: action.active ? 'none' : '1px solid #e2e8f0',
-                background: action.active ? 'linear-gradient(135deg, #0d9488, #0ea5e9)' : '#fff',
-                color: action.active ? '#white' : 'var(--text-secondary)',
+                border: action.active ? 'none' : '1px solid var(--border-color)',
+                background: action.active ? 'linear-gradient(135deg, #0d9488, #0ea5e9)' : 'var(--bg-tertiary)',
+                color: action.active ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: 600,
                 fontSize: '0.885rem',
                 cursor: 'pointer',
@@ -172,7 +172,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1.8fr)', gap: '1.5rem' }}>
         
         {/* Portfolio Overview */}
-        <div className="glass-panel" style={{ padding: '1.25rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>Portfolio Overview</h3>
           
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '180px', position: 'relative' }}>
@@ -215,10 +215,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
         </div>
 
         {/* Activity Chart */}
-        <div className="glass-panel" style={{ padding: '1.25rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Activity Chart</h3>
-            <select style={{ padding: '4px 8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, outline: 'none' }}>
+            <select style={{ padding: '4px 8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, outline: 'none' }}>
               <option>7D</option>
               <option>30D</option>
               <option>1Y</option>
@@ -242,10 +242,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
                     <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${v/1000}k`} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${v/1000}k`} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)' }} />
                 <Area type="monotone" dataKey="txs" stroke="#0ea5e9" strokeWidth={2.5} fillOpacity={1} fill="url(#activity-gradient)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -255,8 +255,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
       </div>
 
       {/* Recent Transactions List */}
-      <div className="glass-panel" style={{ padding: '1.25rem', background: '#fff', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #f1f5f9', paddingBottom: '0.85rem' }}>
+      <div className="glass-panel" style={{ padding: '1.25rem', borderRadius: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.85rem' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Recent Transactions</h3>
           <button onClick={() => navigateTo('analytics')} style={{ background: 'transparent', border: 'none', color: '#0ea5e9', fontSize: '0.885rem', fontWeight: 600, cursor: 'pointer' }}>
             View all
@@ -266,7 +266,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+              <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                 <th style={{ padding: '8px 12px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Type</th>
                 <th style={{ padding: '8px 12px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>From</th>
                 <th style={{ padding: '8px 12px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>To</th>
@@ -286,7 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
                   { type: 'Contract Call', from: '0xb59b...d224', to: '0x7f35...a2b1', amount: '—', value: '—', time: '2h ago' },
                   { type: 'Tx Memo Created', from: '0xb59b...d224', to: '—', amount: '—', value: '—', time: '3h ago' }
                 ].map((mock, idx) => (
-                  <tr key={idx} style={{ borderBottom: '1px solid #f8fafc', fontSize: '0.885rem' }}>
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)', fontSize: '0.885rem' }}>
                     <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         {mock.type === 'Swap' ? '🔄' : mock.type === 'Payment' ? '💸' : mock.type === 'Deposit' ? '📥' : mock.type === 'Contract Call' ? '💻' : '📋'}
@@ -299,13 +299,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
                     <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{mock.value}</td>
                     <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{mock.time}</td>
                     <td style={{ padding: '12px' }}>
-                      <span style={{ background: '#e6fdf5', color: '#10b981', padding: '3px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>Success</span>
+                      <span style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', padding: '3px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 700 }}>Success</span>
                     </td>
                   </tr>
                 ))
               ) : (
                 txs.map((tx) => (
-                  <tr key={tx.id} style={{ borderBottom: '1px solid #f8fafc', fontSize: '0.885rem' }} onClick={() => tx.explorerUrl && window.open(tx.explorerUrl, '_blank')}>
+                  <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-color)', fontSize: '0.885rem' }} onClick={() => tx.explorerUrl && window.open(tx.explorerUrl, '_blank')}>
                     <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                         {tx.action.includes('Swap') ? '🔄' : tx.action.includes('Memo') ? '📋' : '💸'}
@@ -319,8 +319,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ connectedAccount, navigate
                     <td style={{ padding: '12px', color: 'var(--text-secondary)' }}>{new Date(tx.timestamp).toLocaleTimeString()}</td>
                     <td style={{ padding: '12px' }}>
                       <span style={{
-                        background: tx.status === 'COMPLETE' ? '#e6fdf5' : tx.status === 'PENDING' ? '#fef9c3' : '#fee2e2',
-                        color: tx.status === 'COMPLETE' ? '#10b981' : tx.status === 'PENDING' ? '#ca8a04' : '#ef4444',
+                        background: tx.status === 'COMPLETE' ? 'rgba(16,185,129,0.12)' : tx.status === 'PENDING' ? 'rgba(234,179,8,0.12)' : 'rgba(239,68,68,0.12)',
+                        color: tx.status === 'COMPLETE' ? '#10b981' : tx.status === 'PENDING' ? '#eab308' : '#ef4444',
                         padding: '3px 8px',
                         borderRadius: '12px',
                         fontSize: '0.75rem',

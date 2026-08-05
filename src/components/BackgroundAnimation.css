@@ -4,7 +4,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: -2; /* Behind everything and the gradient */
+  z-index: 0; /* Above body background */
   overflow: hidden;
   pointer-events: none;
 }
@@ -31,8 +31,15 @@
   background-position: center;
   bottom: -150px;
   animation: bg-fly-up 20s linear infinite;
-  opacity: 0.15; /* Make the ARC logo slightly transparent so it doesn't distract */
-  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+  /* Default Light Mode Styling for white SVG: turn white into vibrant Arc Cyan/Teal blue */
+  filter: invert(48%) sepia(85%) saturate(1800%) hue-rotate(170deg) brightness(95%) contrast(90%);
+  opacity: 0.25;
+}
+
+/* Dark Mode Overrides for floating ARC logos */
+[data-theme="dark"] .bg-bubbles li {
+  filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.6));
+  opacity: 0.18;
 }
 
 .bg-bubbles li:nth-child(1) {

@@ -1,20 +1,20 @@
 import { useState, useEffect, useCallback, startTransition } from 'react';
 import { ethers } from 'ethers';
 import { SwapWidget } from './components/SwapWidget';
-import { NetworkStats } from './components/NetworkStats';
 import { ArcAppKit } from './components/ArcAppKit';
-import { Faucet } from './components/Faucet';
-import { Logs } from './components/Logs';
 import { Analytics } from './components/Analytics';
-import { CircleSmartContracts } from './components/CircleSmartContracts';
 import { Payments } from './components/Payments';
 import { FeaturesDoc } from './components/FeaturesDoc';
 import { BackgroundAnimation } from './components/BackgroundAnimation';
 import { TransactionMemos } from './components/TransactionMemos';
-import { Activity, Layers, Repeat, Wallet, X, ChevronDown, Menu, Bot, Send, Settings } from 'lucide-react';
+import { Layers, Repeat, X, Menu, Bot, Send, Settings, LayoutGrid, RefreshCw, BarChart3, FileText, Landmark, ChevronDown, ChevronRight, HelpCircle, Zap, Sun, Moon } from 'lucide-react';
 import { MerchantTreasury } from './components/MerchantTreasury';
 import { saveTransaction } from './lib/TransactionHistory';
+import { Dashboard } from './components/Dashboard';
+import { RightSidebar } from './components/RightSidebar';
+import { ArbitrageBot } from './components/ArbitrageBot';
 import { PresentationDeck } from './components/PresentationDeck';
+import { AgentStack } from './components/AgentStack';
 
 // Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
 if (typeof window !== 'undefined') {
@@ -39,7 +39,7 @@ if (typeof window !== 'undefined') {
   };
 }
 
-type ViewState = 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury' | 'bridge' | 'presentation';
+type ViewState = 'dashboard' | 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury' | 'bridge' | 'arbitrage' | 'presentation' | 'agent-stack';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -55,16 +55,30 @@ interface EIP6963ProviderDetail {
 
 function getInitialView(): ViewState {
   const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury', 'bridge', 'presentation'];
+  const validViews: ViewState[] = ['dashboard', 'swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury', 'bridge', 'arbitrage', 'presentation'];
   if (validViews.includes(path as ViewState)) {
     return path as ViewState;
   }
-  return 'swap';
+  return 'dashboard';
 }
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewState>(getInitialView);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // --- THEME STATE (LIGHT / DARK) ---
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   // --- GLOBAL AUTONOMOUS CHATBOT ENGINE ---
   const [chatOpen, setChatOpen] = useState(false);
@@ -89,7 +103,7 @@ Build on Arc details:
   1. swap (parameters: amount, fromToken, toToken)
   2. deposit (parameters: amount, token)
   3. transfer (parameters: amount, token, recipient)
-  4. navigate (parameters: view - can be 'swap', 'uniswap', 'bridge', 'payments', 'faucet', 'contracts', 'memos', 'merchant-treasury', 'doc')
+  4. navigate (parameters: view - can be 'dashboard', 'swap', 'uniswap', 'bridge', 'payments', 'faucet', 'contracts', 'memos', 'merchant-treasury', 'doc')
   5. escrow (parameters: amount, description)
 
 Return your response strictly as a JSON object with this schema:
@@ -440,6 +454,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
               else if (cmd.view === 'memos') label = "Tx Memos 📋";
               else if (cmd.view === 'merchant-treasury') label = "Custom SCP Contract 🏺";
               else if (cmd.view === 'doc') label = "Docs 📖";
+              else if (cmd.view === 'dashboard') label = "Dashboard 🏠";
 
               let view = cmd.view;
               if (cmd.view === 'universal' || cmd.view === 'lifi') {
@@ -527,6 +542,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
         let view: ViewState = 'swap';
         let label = "Swap";
         if (lower.includes("uniswap") || lower.includes("uni")) { view = 'uniswap'; label = "Uniswap 🦄"; }
+        else if (lower.includes("arbitrage") || lower.includes("bot")) { view = 'arbitrage'; label = "Arbitrage Bot ⚡"; }
         else if (lower.includes("bridge") || lower.includes("cctp")) { view = 'bridge'; label = "CCTP Bridge 🌉"; }
         else if (lower.includes("payment") || lower.includes("thanh toán")) { view = 'payments'; label = "Payments 💳"; }
         else if (lower.includes("log") || lower.includes("lịch sử")) { view = 'logs'; label = "Logs 📋"; }
@@ -540,6 +556,9 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
           view = 'swap';
           label = "Universal LI.FI Swap 🌐";
           setActiveWidget('lifi');
+        } else if (lower.includes("dashboard") || lower.includes("trang chủ") || lower.includes("chính")) {
+          view = 'dashboard';
+          label = "Dashboard 🏠";
         } else if (lower.includes("native") || lower.includes("swap")) {
           view = 'swap';
           label = "Native Arc Swap 🔄";
@@ -790,228 +809,330 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
   return (
     <>
       <BackgroundAnimation />
-      <div className="app-container">
-        <div className="mobile-header">
-          <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
-            <Activity color="#3b82f6" />
-            BAVI Studio
-          </div>
-          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)}>
-            <Menu size={24} color="#f8fafc" />
+      <div className="mobile-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', padding: '10px 15px', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="nav-brand" onClick={() => navigateTo('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: 'none', WebkitTextFillColor: 'initial', color: 'var(--text-primary)', margin: 0, padding: 0 }}>
+          <img src="/logo.png" alt="BAVI Logo" style={{ width: '34px', height: '34px', borderRadius: '10px', objectFit: 'cover' }} />
+          <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>BAVI Studio</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={toggleTheme}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--text-primary)' }}
+            title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+          >
+            {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+          </button>
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(true)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
+            <Menu size={24} color="var(--text-primary)" />
           </button>
         </div>
+      </div>
 
-        {isMobileMenuOpen && (
-          <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
-        )}
+      {isMobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setIsMobileMenuOpen(false)}></div>
+      )}
 
-        <aside className={`sidebar animate-fade-in ${isMobileMenuOpen ? 'open' : ''}`}>
-          <div className="nav-brand" onClick={() => navigateTo('swap')} style={{ cursor: 'pointer' }}>
-            <Activity color="#3b82f6" />
-            BAVI Finance Studio
+      <div className="app-container" style={{ display: 'flex', gap: '1.5rem', background: 'transparent', padding: '1.5rem', minHeight: '100vh', boxSizing: 'border-box' }}>
+        <aside className={`sidebar animate-fade-in ${isMobileMenuOpen ? 'open' : ''}`} style={{
+          width: '270px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '32px',
+          padding: '1.75rem 1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.5rem',
+          height: 'calc(100vh - 3rem)',
+          position: 'sticky',
+          top: '1.5rem',
+          boxShadow: 'var(--shadow-card)',
+          zIndex: 100,
+          boxSizing: 'border-box'
+        }}>
+          <div 
+            onClick={() => {
+              setCurrentView('dashboard');
+              setIsMobileMenuOpen(false);
+            }}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '14px', 
+              borderBottom: '1px solid var(--border-color)', 
+              paddingBottom: '1.25rem', 
+              marginBottom: '0.75rem',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+          >
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <img 
+                src="/logo.png" 
+                alt="BAVI Logo" 
+                style={{ 
+                  width: '46px', 
+                  height: '46px', 
+                  borderRadius: '14px', 
+                  objectFit: 'cover', 
+                  boxShadow: '0 6px 20px rgba(14, 165, 233, 0.35), 0 0 0 2px rgba(14, 165, 233, 0.2)', 
+                  transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                }} 
+                className="hover:scale-105"
+              />
+              <span style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', border: '2px solid var(--bg-card)' }}></span>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+              <div style={{ 
+                fontSize: '1.45rem', 
+                fontWeight: 900, 
+                background: 'linear-gradient(135deg, #0ea5e9 0%, #0d9488 50%, #6366f1 100%)', 
+                WebkitBackgroundClip: 'text', 
+                WebkitTextFillColor: 'transparent', 
+                lineHeight: 1.1, 
+                letterSpacing: '-0.5px',
+                fontFamily: "'Outfit', 'Inter', sans-serif" 
+              }}>
+                BAVI
+              </div>
+              <div style={{ 
+                fontSize: '0.68rem', 
+                color: 'var(--text-muted)', 
+                fontWeight: 800, 
+                letterSpacing: '1.5px', 
+                textTransform: 'uppercase', 
+                fontFamily: "'Outfit', 'Inter', sans-serif",
+                opacity: 0.9,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                FINANCE STUDIO
+              </div>
+            </div>
           </div>
 
-          <div className="nav-links">
-            <a
-              className={`nav-link ${currentView === 'swap' ? 'active' : ''}`}
-              onClick={() => navigateTo('swap')}
-            >
-              Swap
-            </a>
-
-            <a
-              className={`nav-link ${currentView === 'payments' ? 'active' : ''}`}
-              onClick={() => navigateTo('payments')}
-            >
-              Payments
-            </a>
-            <a
-              className={`nav-link ${currentView === 'analytics' ? 'active' : ''}`}
-              onClick={() => navigateTo('analytics')}
-            >
-              Analytics
-            </a>
-            <a
-              className={`nav-link ${currentView === 'faucet' ? 'active' : ''}`}
-              onClick={() => navigateTo('faucet')}
-            >
-              Faucet
-            </a>
-            <a
-              className={`nav-link ${currentView === 'memos' ? 'active' : ''}`}
-              onClick={() => navigateTo('memos')}
-              style={currentView === 'memos' ? { boxShadow: 'inset 4px 0 0 #3b82f6', background: 'rgba(59, 130, 246, 0.15)', color: 'var(--text-primary)' } : {}}
-            >
-              Tx Memos 📋
-            </a>
-            <a
-              className={`nav-link ${currentView === 'merchant-treasury' ? 'active' : ''}`}
-              onClick={() => navigateTo('merchant-treasury')}
-              style={currentView === 'merchant-treasury' ? { boxShadow: 'inset 4px 0 0 #a78bfa', background: 'rgba(167, 139, 250, 0.15)', color: 'var(--text-primary)' } : {}}
-            >
-              <span style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: '1.25', fontSize: '1.1rem' }}>
-                <span>Custom SCP</span>
-                <span>Contract</span>
-              </span>
-              <span style={{ marginLeft: '10px', display: 'inline-flex', alignItems: 'center' }}>🏺</span>
-            </a>
-            <a
-              className={`nav-link ${currentView === 'presentation' ? 'active' : ''}`}
-              onClick={() => navigateTo('presentation')}
-              style={currentView === 'presentation' ? { boxShadow: 'inset 4px 0 0 #38bdf8', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--text-primary)' } : {}}
-            >
-              Presentation Deck 📊
-            </a>
-            <a
-              className={`nav-link ${currentView === 'doc' ? 'active' : ''}`}
-              onClick={() => navigateTo('doc')}
-            >
-              Docs
-            </a>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
+            {([
+              { label: 'Dashboard', view: 'dashboard', icon: <LayoutGrid size={20} /> },
+              { label: 'Swap', view: 'swap', icon: <RefreshCw size={20} /> },
+              { label: 'Send / Pay', view: 'payments', icon: <Send size={20} /> },
+              { label: 'Invoices & Receipts', view: 'memos', icon: <FileText size={20} /> },
+              { label: 'Smart Treasury', view: 'merchant-treasury', icon: <Landmark size={20} /> },
+              { label: 'AI Auto-Pay', view: 'agent-stack', icon: <Bot size={20} />, badgeText: 'AI' },
+              { label: 'Analytics', view: 'analytics', icon: <BarChart3 size={20} /> },
+              { label: 'Arbitrage Bot', view: 'arbitrage', icon: <Zap size={20} />, badgeText: 'SOON' }
+            ] as Array<{ label: string; view: string; icon: any; badge?: boolean; badgeText?: string }>).map(item => {
+              const active = currentView === item.view;
+              return (
+                <a
+                  key={item.view}
+                  className={`nav-link-custom ${active ? 'active' : ''}`}
+                  onClick={() => {
+                    navigateTo(item.view as any);
+                    setIsMobileMenuOpen(false);
+                  }}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {item.badgeText && (
+                    <span style={{ background: 'linear-gradient(135deg, #f59e0b, #ef4444)', color: '#fff', fontSize: '0.65rem', padding: '2px 7px', borderRadius: '6px', fontWeight: 800, fontFamily: "'Outfit', sans-serif", letterSpacing: '0.5px' }}>{item.badgeText}</span>
+                  )}
+                </a>
+              );
+            })}
           </div>
 
-          <div className="header-controls">
-            <div className="status-pulse" style={{ borderRadius: '24px', cursor: 'default', width: 'fit-content' }}>
-              <div className="pulse-dot"></div>
-              Build on Arc
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', flexShrink: 0 }}>
+            {/* Wallet Status Card */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                padding: '12px 16px',
+                borderRadius: '16px',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-card)',
+                fontFamily: "'Outfit', 'Inter', sans-serif"
+              }}
+              className="sidebar-card-hover"
+              onClick={() => {
+                connectWallet();
+                setIsMobileMenuOpen(false);
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {connectedWalletInfo ? (
+                  <img src={connectedWalletInfo.icon} alt={connectedWalletInfo.name} style={{ width: 22, height: 22, borderRadius: '50%' }} />
+                ) : (
+                  <span style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center' }}>🦊</span>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                    {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}
+                  </span>
+                  <span style={{ fontSize: '0.725rem', fontWeight: 600, color: address ? '#10b981' : 'var(--text-secondary)', lineHeight: 1.1 }}>
+                    {address ? 'Connected' : 'Disconnected'}
+                  </span>
+                </div>
+              </div>
+              <ChevronDown size={16} color="var(--text-secondary)" />
             </div>
 
-            <button onClick={() => connectWallet()} className="wallet-button" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 12px', background: 'rgba(255, 255, 255, 0.03)', borderRadius: '24px', width: 'fit-content' }}>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                {connectedWalletInfo ? (
-                  <img src={connectedWalletInfo.icon} alt={connectedWalletInfo.name} style={{ width: 24, height: 24, borderRadius: '50%' }} />
-                ) : (
-                  <Wallet size={24} color="var(--text-secondary)" />
-                )}
-              </div>
-
-              <span style={{ fontSize: '14px', fontWeight: 600, margin: '0 2px' }}>
-                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}
+            {/* Help & Support Card -> Redirects to Docs */}
+            <div
+              onClick={() => {
+                navigateTo('doc');
+                setIsMobileMenuOpen(false);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 16px',
+                borderRadius: '16px',
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-card)',
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-card)',
+                fontFamily: "'Outfit', 'Inter', sans-serif"
+              }}
+              className="sidebar-card-hover"
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <HelpCircle size={18} color="var(--text-secondary)" />
+                Help & Support
               </span>
-
-              <ChevronDown size={16} color="var(--text-secondary)" />
-            </button>
+              <ChevronRight size={16} color="var(--text-muted)" />
+            </div>
           </div>
         </aside>
 
-        <div className="main-content-area">
-          {currentView === 'swap' && (
-            <main className="main-grid">
-              <NetworkStats connectedAccount={address} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: 0 }}>
+          <header style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', height: '40px', background: 'transparent', boxSizing: 'border-box', gap: '12px' }}>
+            <button
+              onClick={toggleTheme}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '38px',
+                height: '38px',
+                borderRadius: '10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                boxShadow: 'var(--shadow-card)',
+                transition: 'all 0.2s ease'
+              }}
+              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+            >
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <button onClick={() => connectWallet()} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', padding: '6px 14px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', outline: 'none', boxShadow: 'var(--shadow-card)' }}>
+              {connectedWalletInfo ? (
+                <img src={connectedWalletInfo.icon} alt={connectedWalletInfo.name} style={{ width: 18, height: 18, borderRadius: '50%' }} />
+              ) : (
+                <span>🦊</span>
+              )}
+              <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connect Wallet'}</span>
+            </button>
+          </header>
 
-              <div className="widget-switcher-container">
-                <div className="glass-panel widget-switcher">
-                  <button
-                    onClick={() => setActiveWidget('native')}
-                    className={`switcher-btn ${activeWidget === 'native' ? 'active' : ''}`}
-                  >
-                    <Layers size={18} />
-                    Native Arc
-                  </button>
-                  <button
-                    onClick={() => setActiveWidget('lifi')}
-                    className={`switcher-btn ${activeWidget === 'lifi' ? 'active' : ''}`}
-                  >
-                    <Repeat size={18} />
-                    Universal (LI.FI)
-                  </button>
-                </div>
-
-                <div className="animate-fade-in">
-                  {activeWidget === 'native'
-                    ? <ArcAppKit connectedAccount={address} getProvider={getProvider} />
-                    : <SwapWidget />}
-                </div>
-              </div>
-            </main>
-          )}
-
-
-          {currentView === 'payments' && (
-            <main className="page-view">
-              <Payments walletProvider={walletProvider} address={address || ''} />
-            </main>
-          )}
-
-          {currentView === 'logs' && (
-            <main className="page-view">
-              <Logs />
-            </main>
-          )}
-
-          {currentView === 'analytics' && (
-            <main className="page-view">
-              <Analytics address={address} />
-            </main>
-          )}
-
-          {currentView === 'faucet' && (
-            <main className="page-view">
-              <Faucet connectedAccount={address} />
-            </main>
-          )}
-
-          {currentView === 'contracts' && (
-            <main className="page-view">
-              <CircleSmartContracts />
-            </main>
-          )}
-
-          {currentView === 'memos' && (
-            <main className="page-view">
-              <TransactionMemos walletProvider={walletProvider} address={address || ''} />
-            </main>
-          )}
-
-
-
-          {currentView === 'presentation' && (
-            <main className="page-view">
-              <PresentationDeck />
-            </main>
-          )}
-
-          {currentView === 'doc' && (
-            <main className="page-view">
-              <FeaturesDoc />
-            </main>
-          )}
-
-          {currentView === 'merchant-treasury' && (
-            <main className="page-view">
-              <MerchantTreasury connectedAccount={address} walletProvider={getProvider()} />
-            </main>
-          )}
-
-          {/* Wallet Selection Modal */}
-          {showWalletModal && (
-            <div className="modal-overlay" onClick={() => setShowWalletModal(false)}>
-              <div className="wallet-modal" onClick={e => e.stopPropagation()}>
-                <div className="wallet-modal-header">
-                  <h3 className="wallet-modal-title">Connect a Wallet</h3>
-                  <button className="wallet-close-btn" onClick={() => setShowWalletModal(false)}>
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <div className="wallet-list">
-                  {availableWallets.map(wallet => (
-                    <div
-                      key={wallet.info.uuid}
-                      className="wallet-item"
-                      onClick={() => connectWallet(wallet)}
-                    >
-                      <img src={wallet.info.icon} alt={wallet.info.name} className="wallet-icon" />
-                      <span className="wallet-name">{wallet.info.name}</span>
-                      <span className="wallet-status">Detected</span>
+          <div style={{ display: 'flex', gap: '1.5rem', flex: 1, minHeight: 0 }} className="content-split-layout">
+            <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }} className="middle-scrollbar-panel">
+              {currentView === 'dashboard' && <Dashboard connectedAccount={address} navigateTo={navigateTo} />}
+              {currentView === 'presentation' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <PresentationDeck />
+                </main>
+              )}
+              {currentView === 'arbitrage' && <ArbitrageBot connectedAccount={address} getProvider={getProvider} />}
+              {currentView === 'swap' && (
+                <main style={{ width: '100%', maxWidth: '650px', margin: '0 auto', padding: '1.5rem 0' }}>
+                  <div className="widget-switcher-container">
+                    <div className="glass-panel widget-switcher">
+                      <button onClick={() => setActiveWidget('native')} className={`switcher-btn ${activeWidget === 'native' ? 'active' : ''}`}><Layers size={18} />Native Arc</button>
+                      <button onClick={() => setActiveWidget('lifi')} className={`switcher-btn ${activeWidget === 'lifi' ? 'active' : ''}`}><Repeat size={18} />Universal (LI.FI)</button>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="animate-fade-in">
+                      {activeWidget === 'native' ? <ArcAppKit connectedAccount={address} getProvider={getProvider} /> : <SwapWidget />}
+                    </div>
+                  </div>
+                </main>
+              )}
+              {currentView === 'payments' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <Payments walletProvider={walletProvider} address={address || ''} />
+                </main>
+              )}
+              {currentView === 'analytics' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <Analytics address={address} />
+                </main>
+              )}
+              {currentView === 'memos' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <TransactionMemos walletProvider={walletProvider} address={address || ''} />
+                </main>
+              )}
+              {currentView === 'merchant-treasury' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <MerchantTreasury connectedAccount={address} walletProvider={walletProvider} />
+                </main>
+              )}
+              {currentView === 'agent-stack' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <AgentStack connectedAccount={address} walletProvider={walletProvider} />
+                </main>
+              )}
+              {currentView === 'doc' && (
+                <main className="page-view" style={{ marginTop: 0, padding: 0 }}>
+                  <FeaturesDoc />
+                </main>
+              )}
             </div>
-          )}
+
+            {(currentView === 'dashboard' || currentView === 'arbitrage' || currentView === 'payments' || currentView === 'memos' || currentView === 'merchant-treasury' || currentView === 'doc') && (
+              <RightSidebar connectedAccount={address} getProvider={getProvider} navigateTo={navigateTo} />
+            )}
+          </div>
         </div>
       </div>
+
+      {showWalletModal && (
+        <div className="modal-overlay" onClick={() => setShowWalletModal(false)}>
+          <div className="wallet-modal" onClick={e => e.stopPropagation()}>
+            <div className="wallet-modal-header">
+              <h3 className="wallet-modal-title">Connect a Wallet</h3>
+              <button className="wallet-close-btn" onClick={() => setShowWalletModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="wallet-list">
+              {availableWallets.map(wallet => (
+                <div
+                  key={wallet.info.uuid}
+                  className="wallet-item"
+                  onClick={() => connectWallet(wallet)}
+                >
+                  <img src={wallet.info.icon} alt={wallet.info.name} className="wallet-icon" />
+                  <span className="wallet-name">{wallet.info.name}</span>
+                  <span className="wallet-status">Detected</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Chat Box for Autonomous Agent */}
       <div className="agent-chat-container">
@@ -1117,6 +1238,58 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
             animation: onlinePulse 2s infinite ease-out;
             left: 0;
             top: 0;
+          }
+
+          /* Sidebar Layout Enhancements matching Mockup */
+          .nav-link-custom {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0.85rem 1.25rem !important;
+            border-radius: 16px !important;
+            font-size: 0.95rem !important;
+            font-weight: 600 !important;
+            color: #64748b !important;
+            background: transparent !important;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            font-family: 'Outfit', 'Inter', sans-serif !important;
+          }
+          .nav-link-custom:hover {
+            color: #0f172a !important;
+            background: #f8fafc !important;
+            transform: translateX(4px);
+          }
+          .nav-link-custom .nav-icon {
+            color: #64748b;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .nav-link-custom:hover .nav-icon {
+            color: #0f172a;
+          }
+          .nav-link-custom.active {
+            color: #0d9488 !important;
+            background: #d2f6f1 !important;
+            font-weight: 700 !important;
+          }
+          .nav-link-custom.active .nav-icon {
+            color: #0d9488 !important;
+          }
+          .nav-link-custom.active:hover {
+            transform: none;
+            background: #d2f6f1 !important;
+          }
+          .sidebar-card-hover {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          }
+          .sidebar-card-hover:hover {
+            border-color: #cbd5e1 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+            transform: translateY(-1px);
           }
 
           /* Responsive Rules for Mobile */
@@ -1345,6 +1518,22 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
                 }}
               >
                 🚰 Faucet Page
+              </button>
+              <button
+                disabled={chatExecuting}
+                onClick={() => handleSendChatMessage("Go to Dashboard")}
+                className="agent-chip"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '14px',
+                  color: '#fbbf24',
+                  fontSize: '0.85rem',
+                  cursor: chatExecuting ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                  outline: 'none',
+                }}
+              >
+                🏠 Dashboard
               </button>
             </div>
 
