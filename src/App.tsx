@@ -16,6 +16,7 @@ import { ArbitrageBot } from './components/ArbitrageBot';
 import { PresentationDeck } from './components/PresentationDeck';
 import { AgentStack } from './components/AgentStack';
 import logoImg from './assets/logo.png';
+import logoDarkImg from './assets/logo-dark.png';
 
 // Global fetch interceptor to strip x-user-agent headers causing CORS preflight blocks on Circle telemetry logs
 if (typeof window !== 'undefined') {
@@ -80,6 +81,8 @@ function App() {
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
+
+  const activeLogo = theme === 'dark' ? logoDarkImg : logoImg;
 
   // --- GLOBAL AUTONOMOUS CHATBOT ENGINE ---
   const [chatOpen, setChatOpen] = useState(false);
@@ -812,8 +815,10 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
       <BackgroundAnimation />
       <div className="mobile-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', padding: '10px 15px', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="nav-brand" onClick={() => navigateTo('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: 'none', WebkitTextFillColor: 'initial', color: 'var(--text-primary)', margin: 0, padding: 0 }}>
-          <img src={logoImg} alt="BAVI Logo" style={{ width: '34px', height: '34px', borderRadius: '10px', objectFit: 'cover' }} />
-          <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>BAVI Studio</span>
+          <div className="brand-logo-container-sm">
+            <img src={activeLogo} alt="Payos Logo" className="brand-logo-img" />
+          </div>
+          <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>Payos Studio</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
@@ -867,19 +872,13 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
             }}
           >
             <div style={{ position: 'relative', flexShrink: 0 }}>
-              <img 
-                src={logoImg} 
-                alt="BAVI Logo" 
-                style={{ 
-                  width: '46px', 
-                  height: '46px', 
-                  borderRadius: '14px', 
-                  objectFit: 'cover', 
-                  boxShadow: '0 6px 20px rgba(14, 165, 233, 0.35), 0 0 0 2px rgba(14, 165, 233, 0.2)', 
-                  transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
-                }} 
-                className="hover:scale-105"
-              />
+              <div className="brand-logo-container">
+                <img 
+                  src={activeLogo} 
+                  alt="Payos Logo" 
+                  className="brand-logo-img hover:scale-105"
+                />
+              </div>
               <span style={{ position: 'absolute', bottom: '-2px', right: '-2px', width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', border: '2px solid var(--bg-card)' }}></span>
             </div>
             
@@ -894,21 +893,20 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
                 letterSpacing: '-0.5px',
                 fontFamily: "'Outfit', 'Inter', sans-serif" 
               }}>
-                BAVI
+                Payos
               </div>
               <div style={{ 
                 fontSize: '0.68rem', 
                 color: 'var(--text-muted)', 
-                fontWeight: 800, 
-                letterSpacing: '1.5px', 
-                textTransform: 'uppercase', 
+                fontWeight: 700, 
+                letterSpacing: '0.3px', 
                 fontFamily: "'Outfit', 'Inter', sans-serif",
                 opacity: 0.9,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px'
               }}>
-                FINANCE STUDIO
+                Fast. Secure. Efficient.
               </div>
             </div>
           </div>
