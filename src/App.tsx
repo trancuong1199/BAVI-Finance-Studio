@@ -816,9 +816,9 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
       <div className="mobile-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', padding: '10px 15px', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="nav-brand" onClick={() => navigateTo('dashboard')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: 'none', WebkitTextFillColor: 'initial', color: 'var(--text-primary)', margin: 0, padding: 0 }}>
           <div className="brand-logo-container-sm">
-            <img src={activeLogo} alt="Payos Logo" className="brand-logo-img" />
+            <img src={activeLogo} alt="BAVI Logo" className="brand-logo-img" />
           </div>
-          <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>Payos Studio</span>
+          <span style={{ fontSize: '1.05rem', fontWeight: 800 }}>BAVI Studio</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
@@ -875,7 +875,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
               <div className="brand-logo-container">
                 <img 
                   src={activeLogo} 
-                  alt="Payos Logo" 
+                  alt="BAVI Logo" 
                   className="brand-logo-img hover:scale-105"
                 />
               </div>
@@ -893,7 +893,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
                 letterSpacing: '-0.5px',
                 fontFamily: "'Outfit', 'Inter', sans-serif" 
               }}>
-                Payos
+                BAVI
               </div>
               <div style={{ 
                 fontSize: '0.68rem', 

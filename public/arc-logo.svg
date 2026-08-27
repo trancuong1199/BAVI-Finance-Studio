@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 400" width="100%" height="100%">
   <defs>
-    <linearGradient id="payosArrowGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+    <linearGradient id="baviArrowGrad" x1="0%" y1="100%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#00c9a7" />
       <stop offset="50%" stop-color="#00d2c2" />
       <stop offset="100%" stop-color="#0ea5e9" />
     </linearGradient>
-    <linearGradient id="payosNavyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="baviNavyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0c2040" />
       <stop offset="100%" stop-color="#1e3a8a" />
     </linearGradient>
@@ -28,7 +28,7 @@
     <path d="M 150 160 C 120 180 80 190 50 175 C 80 210 120 215 155 190 L 140 230 C 130 250 115 260 105 270" fill="none" stroke="#0c2040" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
 
     <!-- Inner Cyan Arrow Loop -->
-    <path d="M 175 195 C 160 165 175 135 210 135 C 245 135 260 160 250 185 L 265 170 M 250 185 L 235 175" fill="none" stroke="url(#payosArrowGrad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
-    <path d="M 180 190 C 190 220 225 225 250 200" fill="none" stroke="url(#payosArrowGrad)" stroke-width="12" stroke-linecap="round" />
+    <path d="M 175 195 C 160 165 175 135 210 135 C 245 135 260 160 250 185 L 265 170 M 250 185 L 235 175" fill="none" stroke="url(#baviArrowGrad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 180 190 C 190 220 225 225 250 200" fill="none" stroke="url(#baviArrowGrad)" stroke-width="12" stroke-linecap="round" />
   </g>
 </svg>
