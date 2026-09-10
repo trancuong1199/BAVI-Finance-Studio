@@ -1,6 +1,6 @@
 # 🚀 BAVI Finance Studio
 
-BAVI Finance Studio is a comprehensive, production-ready DeFi & Agentic Commerce platform built natively on **Arc**—Circle's stablecoin-native Layer-1 network. Arc uses USDC as the native gas token, offers sub-second transaction finality, and natively integrates Circle’s complete suite of developer tools.
+BAVI Finance Studio is a experimental testnet DeFi & Agentic Commerce platform built natively on **Arc**—Circle's stablecoin-native Layer-1 network. Arc uses USDC as the native gas token, offers sub-second transaction finality, and natively integrates Circle’s complete suite of developer tools.
 
 This project is submitted for the **Build on Arc Hackathon**, addressing both the **DeFi Track** and the **Agentic Economy Track** by showing the capabilities of USDC-denominated transaction flows, CCTP bridges, Uniswap portals, and autonomous agent-to-agent escrows.
 
@@ -17,7 +17,7 @@ This project is submitted for the **Build on Arc Hackathon**, addressing both th
 ### 2. Custom SCP Treasury Vaults (DeFi & Agentic Tracks)
 Our custom-built solidity contract `MerchantTreasuryUSDC` supports programmable token deposits, withdrawals, and direct on-chain token swaps via routing interfaces:
 *   Allows merchants or autonomous agents to hold treasuries in stablecoins.
-*   Executes automated swaps inside the vault (e.g. USDC to EURC/cirBTC) to hedge assets or distribute splits.
+*   Vaults accept deposits and owner withdrawals. Swaps use a separate wallet-signed router path; the old treasury swap entry point is disabled.
 
 ### 3. ERC-8183 Agentic Jobs with Vyper Policy Engine (Agentic Track)
 A secure escrow framework for autonomous AI agent commerce:
@@ -57,7 +57,7 @@ The following custom solidity contracts are deployed using **Circle's Developer-
 ## 🚀 Getting Started
 
 ### 📋 Prerequisites
-*   Node.js (v18 or higher)
+*   Node.js (v22.13 or higher)
 *   A Web3 browser wallet (e.g., MetaMask, OKX, Phantom)
 
 ### 📥 Installation & Local Setup
@@ -74,14 +74,10 @@ The following custom solidity contracts are deployed using **Circle's Developer-
     ```
 
 3.  **Configure environment variables**:
-    Create or edit the `.env` file in the root directory:
-    ```env
-    VITE_CIRCLE_API_KEY=<your_circle_developer_api_key>
-    VITE_CIRCLE_WALLET_ID=<your_circle_developer_wallet_id>
-    VITE_CIRCLE_ENTITY_SECRET=<your_32_byte_hex_entity_secret>
-    VITE_CIRCLE_DEPLOYED_CONTRACT=0x428266f0fc0a3b0926a6e81d4ba53203104f0e26
-    VITE_CIRCLE_DEPLOY_TX_HASH=0xc3e140aef2e8137c3ce86da29b47d00bfa556a98f86af1c2c2653078828fd22d
-    ```
+    Copy `.env.example` to `.env.local`. The browser needs only optional public contract metadata.
+    Never put API keys or entity secrets in a `VITE_*` variable or commit `.env` files.
+    Treasury deployment is signed by the connected wallet. Circle credentials are only for local operator scripts.
+    If credentials were previously pushed or deployed, follow [credential recovery](docs/credential-recovery.md).
 
 4.  **Start development server**:
     ```bash

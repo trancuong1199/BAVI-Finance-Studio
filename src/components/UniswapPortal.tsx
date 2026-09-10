@@ -1,16 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowDownUp, RefreshCw, Settings, Info, Plus, Layers } from 'lucide-react';
 import { saveTransaction, getTransactionHistory } from '../lib/TransactionHistory';
-import { BrowserProvider, Contract } from 'ethers';
-
-const ARC_CHAIN_ID = '0x4CEF52'; // 5042002 in hex
-const ARC_CHAIN_PARAMS = {
-  chainId: ARC_CHAIN_ID,
-  chainName: 'Build on Arc',
-  nativeCurrency: { name: 'USDC', symbol: 'USDC', decimals: 18 },
-  rpcUrls: ['https://rpc.testnet.arc.network'],
-  blockExplorerUrls: ['https://testnet.arcscan.app'],
-};
+import { executeArcSwap, ARC_ROUTER } from '../lib/arcSwap';
 
 interface UniswapPortalProps {
   connectedAccount: string | null;
@@ -386,7 +377,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
         saveTransaction(record);
         setSwapStatus({
           type: 'success',
-          msg: `Successfully swapped ${amountIn} ${tokenIn.symbol} for ${amountOut} ${tokenOut.symbol} via Uniswap v4 Router!`,
+          msg: `[SIMULATION] ${amountIn} ${tokenIn.symbol} → ${amountOut} ${tokenOut.symbol}. No transaction was sent.`,
           txHash,
         });
         setSwapLoading(false);
@@ -406,97 +397,18 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
       }
 
       try {
-        setSwapStatus({ type: 'info', msg: 'Switching to Build on Arc...' });
-        
-        // Ensure user is on Arc Testnet
-        try {
-          await eth.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: ARC_CHAIN_ID }],
-          });
-        } catch (switchErr: any) {
-          if (switchErr.code === 4902) {
-            setSwapStatus({ type: 'info', msg: 'Adding Build on Arc to MetaMask...' });
-            await eth.request({
-              method: 'wallet_addEthereumChain',
-              params: [ARC_CHAIN_PARAMS],
-            });
-          } else {
-            throw new Error(`Chain switch failed: ${switchErr.message}`);
-          }
+        if (!['USDC', 'EURC'].includes(tokenIn.symbol) || !['USDC', 'EURC'].includes(tokenOut.symbol) || tokenIn.symbol === tokenOut.symbol) {
+          throw new Error('Live swaps support USDC ↔ EURC only.');
         }
-
-        const provider = new BrowserProvider(eth);
-        const signer = await provider.getSigner();
-
-        const CUSTOM_ROUTER_ADDRESS = import.meta.env.VITE_CIRCLE_DEPLOYED_CONTRACT || '0x5e04b177d2848d937b8dde57a0c2a60d51af3d5b';
-        
-        const tokenInAddress = tokenIn.symbol === 'USDC' ? '0x0000000000000000000000000000000000000000' : tokenIn.address;
-        const tokenOutAddress = tokenOut.symbol === 'USDC' ? '0x0000000000000000000000000000000000000000' : tokenOut.address;
-        
-        const decimalsIn = tokenIn.decimals;
-        const amountInBigInt = BigInt(Math.floor(parseFloat(amountIn) * Math.pow(10, decimalsIn)));
-        
-        const decimalsOut = tokenOut.decimals;
-        const amountOutMinBigInt = BigInt(Math.floor(parseFloat(amountOut) * (1 - parseFloat(activeSlippage)/100) * Math.pow(10, decimalsOut)));
-
-        let txHash;
-
-        if (tokenIn.symbol === 'USDC') {
-          // Native Gas Token (USDC)
-          setSwapStatus({ type: 'info', msg: 'Confirming swap transaction in your wallet...' });
-          
-          const routerContract = new Contract(CUSTOM_ROUTER_ADDRESS, [
-            "function swapExactTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin) external payable"
-          ], signer);
-
-          const tx = await routerContract.swapExactTokens(
-            tokenInAddress,
-            tokenOutAddress,
-            amountInBigInt,
-            amountOutMinBigInt,
-            { value: amountInBigInt }
-          );
-
-          setSwapStatus({ type: 'info', msg: 'Waiting for swap transaction to be confirmed...' });
-          const receipt = await tx.wait();
-          txHash = receipt.hash;
-        } else {
-          // ERC-20 Token (EURC, cirBTC, etc.)
-          setSwapStatus({ type: 'info', msg: `Step 1: Approving contract ${CUSTOM_ROUTER_ADDRESS} to spend ${tokenIn.symbol}...` });
-          
-          const erc20Contract = new Contract(tokenIn.address, [
-            "function approve(address spender, uint256 amount) returns (bool)"
-          ], signer);
-
-          const approveTx = await erc20Contract.approve(CUSTOM_ROUTER_ADDRESS, amountInBigInt);
-          setSwapStatus({ type: 'info', msg: 'Waiting for approval confirmation...' });
-          await approveTx.wait();
-
-          setSwapStatus({ type: 'info', msg: 'Step 2: Executing swap via custom contract router...' });
-
-          const routerContract = new Contract(CUSTOM_ROUTER_ADDRESS, [
-            "function swapExactTokens(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutMin) external payable"
-          ], signer);
-
-          const tx = await routerContract.swapExactTokens(
-            tokenInAddress,
-            tokenOutAddress,
-            amountInBigInt,
-            amountOutMinBigInt
-          );
-
-          setSwapStatus({ type: 'info', msg: 'Waiting for swap transaction to be confirmed...' });
-          const receipt = await tx.wait();
-          txHash = receipt.hash;
-        }
+        const swap = await executeArcSwap(eth, amountIn, tokenIn.symbol as 'USDC' | 'EURC', Math.round(Number(activeSlippage) * 100), msg => setSwapStatus({ type: 'info', msg }));
+        const txHash = swap.txHash;
 
         const record = {
           id: `tx-${Date.now()}`,
           action: `Swap via Contract (Onchain)`,
           amount: amountIn,
           from: connectedAccount,
-          to: CUSTOM_ROUTER_ADDRESS,
+          to: ARC_ROUTER,
           txHash,
           status: 'COMPLETE' as const,
           explorerUrl: `https://testnet.arcscan.app/tx/${txHash}`,
@@ -507,7 +419,7 @@ export const UniswapPortal: React.FC<UniswapPortalProps> = ({ connectedAccount, 
         saveTransaction(record);
         setSwapStatus({
           type: 'success',
-          msg: `Successfully swapped ${amountIn} ${tokenIn.symbol} for ${amountOut} ${tokenOut.symbol} via your custom contract router!`,
+          msg: swap.unwrapWarning || 'Swap confirmed. See the receipt for the amount received.',
           txHash,
         });
         setAmountIn('');

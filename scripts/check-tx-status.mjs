@@ -1,8 +1,9 @@
+import './load-env.mjs';
 import fs from 'fs';
 
 // Parse .env manually
 try {
-  const envContent = fs.readFileSync('.env', 'utf8');
+  const envContent = fs.readFileSync('.env.local', 'utf8');
   envContent.split('\n').forEach(line => {
     const parts = line.split('=');
     if (parts.length >= 2) {
@@ -13,7 +14,7 @@ try {
   });
 } catch (e) {}
 
-const API_KEY = process.env.VITE_CIRCLE_API_KEY;
+const API_KEY = process.env.CIRCLE_API_KEY;
 
 async function checkStatus(contractId, txId) {
   console.log(`Checking status for Contract ID: ${contractId} & Tx ID: ${txId}...`);

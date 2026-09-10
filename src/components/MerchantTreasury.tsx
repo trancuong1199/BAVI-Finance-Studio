@@ -1,7 +1,8 @@
+import { confirmTransaction } from '../lib/swapSafety';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle, Play, FileCode2, Copy, Activity, Settings, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink, Landmark } from 'lucide-react';
-import { BrowserProvider, parseUnits, formatUnits, Contract } from 'ethers';
+import { CheckCircle, Play, FileCode2, Copy, Activity, Send, User, Coins, RefreshCw, ArrowDownLeft, ArrowUpRight, ExternalLink, Landmark } from 'lucide-react';
+import { BrowserProvider, parseUnits, formatUnits, Contract, ContractFactory, isAddress } from 'ethers';
 import MerchantTreasuryArtifact from '../config/MerchantTreasuryArtifact.json';
 import { saveTransaction } from '../lib/TransactionHistory';
 import { switchOrAddArcNetwork, globalRpcProvider } from '../utils/arcChain';
@@ -14,7 +15,7 @@ interface MerchantTreasuryProps {
 const TOKEN_CONFIGS = {
   USDC: { address: '0x3600000000000000000000000000000000000000', decimals: 6, icon: '🪙' },
   EURC: { address: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', decimals: 6, icon: '💶' },
-  cirBTC: { address: '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', decimals: 6, icon: '₿' }
+  cirBTC: { address: '0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF', decimals: 8, icon: '₿' }
 };
 
 type TokenType = 'USDC' | 'EURC' | 'cirBTC';
@@ -46,27 +47,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
         const parsed = JSON.parse(saved);
         if (parsed.USDC && parsed.EURC && parsed.cirBTC) {
           loaded = parsed;
-          let needsUpdate = false;
 
-          // Force upgrade to the user's requested new addresses if they don't match
-          if (loaded.USDC.address && loaded.USDC.address.toLowerCase() !== defaultUSDC.toLowerCase()) {
-            loaded.USDC = { address: defaultUSDC, txHash: initialTx, isSimulated: false };
-            needsUpdate = true;
-          }
-
-          if (loaded.EURC.address && loaded.EURC.address.toLowerCase() !== defaultEURC.toLowerCase()) {
-            loaded.EURC = { address: defaultEURC, txHash: '0x16671fc68657ab32519753751ca3190023564cc9f83a01dd39f9c209df8c999b', isSimulated: false };
-            needsUpdate = true;
-          }
-
-          if (loaded.cirBTC.address && loaded.cirBTC.address.toLowerCase() !== defaultCirBTC.toLowerCase()) {
-            loaded.cirBTC = { address: defaultCirBTC, txHash: '0x90ed667ae98888a8bd40aa7b8d44429710342584e8e97df05ba557acf316e640', isSimulated: false };
-            needsUpdate = true;
-          }
-
-          if (needsUpdate) {
-            localStorage.setItem('arc_merchant_treasuries', JSON.stringify(loaded));
-          }
         }
       } catch (e) {
         console.error("Failed to parse saved contracts:", e);
@@ -85,7 +66,6 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
 
   const [activeTab, setActiveTab] = useState<'deploy' | 'interact'>(initialContract ? 'interact' : 'deploy');
   const [loading, setLoading] = useState(false);
-  const [circleDeploymentId, setCircleDeploymentId] = useState<string>('');
 
   const updateContractState = (address: string, txHash: string, simulated: boolean) => {
     setContracts(prev => {
@@ -109,16 +89,6 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     });
   };
 
-  const setDeploymentTxHash = (hash: string) => {
-    setContracts(prev => {
-      const updated = {
-        ...prev,
-        [selectedToken]: { ...prev[selectedToken], txHash: hash }
-      };
-      localStorage.setItem('arc_merchant_treasuries', JSON.stringify(updated));
-      return updated;
-    });
-  };
 
   const setIsSimulated = (sim: boolean) => {
     setContracts(prev => {
@@ -131,14 +101,8 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     });
   };
 
-  // Settings state (Circle Credentials)
-  const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState(import.meta.env.VITE_CIRCLE_API_KEY || '');
-  const [walletId, setWalletId] = useState(import.meta.env.VITE_CIRCLE_WALLET_ID || '');
-  const [entitySecret, setEntitySecret] = useState(import.meta.env.VITE_CIRCLE_ENTITY_SECRET || '');
-
   // Constructor Inputs
-  const [ownerAddress, setOwnerAddress] = useState(connectedAccount || '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e'); // Default to deployer
+  const [ownerAddress, setOwnerAddress] = useState('');
   const [usdcAddress, setUsdcAddress] = useState(TOKEN_CONFIGS.USDC.address);
 
   // Interaction Inputs & State
@@ -247,122 +211,40 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     setActiveTab(tab);
   };
 
-  // 1. Deployment Handler
+  // Deployment is signed by the connected wallet. No server credentials enter the browser.
   const handleDeploy = async () => {
-    if (!ownerAddress || !usdcAddress) {
-      alert('Please fill in both Owner Address and Token Address!');
+    if (!walletProvider || !connectedAccount) {
+      alert('Connect your wallet before deploying.');
       return;
     }
-
+    const deploymentOwner = ownerAddress || connectedAccount;
+    if (!isAddress(deploymentOwner) || !isAddress(usdcAddress)) {
+      alert('Enter valid owner and token addresses.');
+      return;
+    }
     setLoading(true);
     setLogs([]);
-    addLog(`Starting MerchantTreasury deployment for ${selectedToken}...`);
-
-    // Check if we can do real deploy via Circle SCP
-    if (apiKey && walletId && entitySecret) {
-      addLog(`Circle API credentials found. Submitting deployment request...`);
-      try {
-        const uuid = Array.from({ length: 36 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-        const response = await fetch('https://api.circle.com/v1/w3s/smart-contracts', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'X-Request-Id': uuid
-          },
-          body: JSON.stringify({
-            name: `MerchantTreasury_${selectedToken}`,
-            description: `Custom ${selectedToken} treasury contract deployed via UI`,
-            blockchain: "ARC-TESTNET",
-            walletId: walletId,
-            abiJson: JSON.stringify(MerchantTreasuryArtifact.abi),
-            bytecode: MerchantTreasuryArtifact.bytecode,
-            constructorParameters: [ownerAddress, usdcAddress],
-            fee: {
-              type: "level",
-              config: {
-                feeLevel: "MEDIUM"
-              }
-            }
-          })
-        });
-
-        const data = await response.json();
-        if (response.ok && data.data && data.data.contractId) {
-          addLog(`Deployment request accepted by Circle.`);
-          addLog(`Circle Contract ID: ${data.data.contractId}`);
-          addLog(`Circle Deployment Transaction ID: ${data.data.transactionId}`);
-          setCircleDeploymentId(data.data.contractId);
-          setIsSimulated(false);
-
-          // We wait and poll status
-          addLog(`Polling deployment status from Circle...`);
-          pollCircleDeploymentStatus(data.data.contractId);
-        } else {
-          const errMsg = data.message || JSON.stringify(data);
-          addLog(`Circle API Error: ${errMsg}. Falling back to Simulation...`);
-          runSimulation();
-        }
-      } catch (err: any) {
-        addLog(`Circle API connection error: ${err.message || err}. Falling back to Simulation...`);
-        runSimulation();
-      }
-    } else {
-      addLog(`No Circle API credentials found. Falling back to Simulation...`);
-      runSimulation();
-    }
-  };
-
-  const pollCircleDeploymentStatus = async (contractId: string) => {
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      if (attempts > 15) {
-        clearInterval(interval);
-        addLog(`Deployment timeout. Please manually click 'Check Circle Status'.`);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await fetch(`https://api.circle.com/v1/w3s/smart-contracts/${contractId}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`
-          }
-        });
-        const data = await response.json();
-        if (response.ok && data.data) {
-          const status = data.data.status;
-          addLog(`Current deploy status: ${status}`);
-          if (data.data.contractAddress) {
-            clearInterval(interval);
-            addLog(`Contract deployed successfully! Address: ${data.data.contractAddress}`);
-            setDeployedContractAddress(data.data.contractAddress);
-            if (data.data.txHash) setDeploymentTxHash(data.data.txHash);
-            setLoading(false);
-            setActiveTab('interact');
-          }
-        }
-      } catch (err: any) {
-        console.error("Poll error:", err);
-      }
-    }, 4000);
-  };
-
-  const runSimulation = () => {
-    setIsSimulated(true);
-    setTimeout(() => {
-      const mockAddr = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      const mockTx = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-      addLog(`[SIMULATION] Contract deployed successfully!`);
-      addLog(`[SIMULATION] Address: ${mockAddr}`);
-      addLog(`[SIMULATION] Tx Hash: ${mockTx}`);
-      setDeployedContractAddress(mockAddr);
-      setDeploymentTxHash(mockTx);
-      setLoading(false);
+    try {
+      if (!await switchOrAddArcNetwork(walletProvider)) throw new Error('Switch to Arc Testnet first.');
+      const provider = new BrowserProvider(walletProvider);
+      if ((await provider.getNetwork()).chainId !== 5042002n) throw new Error('Arc Testnet is required.');
+      const signer = await provider.getSigner();
+      if ((await signer.getAddress()).toLowerCase() !== connectedAccount.toLowerCase()) throw new Error('Wallet account changed. Reconnect before deploying.');
+      const factory = new ContractFactory(MerchantTreasuryArtifact.abi, MerchantTreasuryArtifact.bytecode, signer);
+      addLog('Confirm treasury deployment in your wallet.');
+      const contract = await factory.deploy(deploymentOwner, usdcAddress);
+      const tx = contract.deploymentTransaction();
+      if (!tx) throw new Error('Deployment transaction is unavailable.');
+      const receipt = await confirmTransaction(tx);
+      const address = await contract.getAddress();
+      updateContractState(address, receipt.hash, false);
+      addLog(`Deployment confirmed: ${address}`);
       setActiveTab('interact');
-    }, 2000);
+    } catch (err) {
+      addLog(`Deployment failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 2. Interaction Handlers
@@ -858,29 +740,6 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
     }
   };
 
-  const handleCheckCircleStatus = async () => {
-    if (!circleDeploymentId) return;
-    try {
-      const response = await fetch(`https://api.circle.com/v1/w3s/smart-contracts/${circleDeploymentId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`
-        }
-      });
-      const data = await response.json();
-      if (response.ok && data.data) {
-        alert(`Circle API Status:\n- Contract ID: ${circleDeploymentId}\n- Status: ${data.data.status}\n- Address: ${data.data.contractAddress || 'Pending'}`);
-        if (data.data.contractAddress) {
-          setDeployedContractAddress(data.data.contractAddress);
-        }
-      } else {
-        alert(`API Error: ${data.message || JSON.stringify(data)}`);
-      }
-    } catch (err: any) {
-      alert(`Network error: ${err.message || err}`);
-    }
-  };
-
   return (
     <div className="page-container animate-fade-in">
       <div className="page-header">
@@ -971,42 +830,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
           {activeTab === 'deploy' && (
             <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-              {/* Credentials & Settings collapsible drawer */}
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-                  onClick={() => setShowSettings(!showSettings)}
-                >
-                  <h3 style={{ margin: 0, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#a1a1aa' }}>
-                    <Settings size={18} /> Credentials & Settings (Circle Developer APIs)
-                  </h3>
-                  <span style={{ color: '#a1a1aa', fontSize: '0.9rem' }}>{showSettings ? 'Hide' : 'Show'}</span>
-                </div>
-
-                {showSettings && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-                    <div className="input-group">
-                      <label className="input-label">Circle Developer API Key</label>
-                      <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="kit-input" placeholder="TEST_API_KEY:..." />
-                    </div>
-                    <div className="input-group">
-                      <label className="input-label">Developer Wallet ID</label>
-                      <input type="text" value={walletId} onChange={(e) => setWalletId(e.target.value)} className="kit-input" placeholder="82a4d3..." />
-                    </div>
-                    <div className="input-group">
-                      <label className="input-label">Entity Secret Ciphertext</label>
-                      <textarea
-                        rows={2}
-                        value={entitySecret}
-                        onChange={(e) => setEntitySecret(e.target.value)}
-                        className="kit-input"
-                        placeholder="Paste your encrypted entity secret ciphertext here"
-                        style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <p>Deploy with your connected wallet on Arc Testnet. You will confirm the transaction and pay its gas fee.</p>
 
               {/* Deployment Settings */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
@@ -1016,7 +840,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                     type="text"
                     className="kit-input"
                     placeholder="0x..."
-                    value={ownerAddress}
+                    value={ownerAddress || connectedAccount || ''}
                     onChange={(e) => setOwnerAddress(e.target.value)}
                   />
                 </div>
@@ -1097,7 +921,7 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
               <button
                 className="kit-action-btn"
                 onClick={handleDeploy}
-                disabled={loading || !ownerAddress || !usdcAddress}
+                disabled={loading || !connectedAccount || !usdcAddress}
                 style={{ background: 'linear-gradient(135deg, #a78bfa, #7c3aed)', color: '#fff', border: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem', padding: '0.9rem' }}
               >
                 {loading ? (
@@ -1360,18 +1184,6 @@ export const MerchantTreasury: React.FC<MerchantTreasuryProps> = ({ connectedAcc
                 )}
               </div>
 
-              {/* Circle API status checking for real deploy */}
-              {!isSimulated && circleDeploymentId && (
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button
-                    onClick={handleCheckCircleStatus}
-                    className="kit-action-btn"
-                    style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
-                  >
-                    Check Deploy Status on Circle Console
-                  </button>
-                </div>
-              )}
 
             </div>
           )}

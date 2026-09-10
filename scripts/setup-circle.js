@@ -1,7 +1,8 @@
+import './load-env.mjs';
 import crypto from 'crypto';
 import fs from 'fs';
 
-const API_KEY = 'TEST_API_KEY:ca21ddf43344f814a3b699f8205a961e:5b9d8a9098e9b24de94162eaa7c39fac';
+const API_KEY = process.env.CIRCLE_API_KEY;
 const BASE_URL = 'https://api-sandbox.circle.com/v1/w3s';
 
 const getHeaders = () => ({
@@ -95,12 +96,12 @@ async function main() {
   console.log("Template ID:", templateId);
 
   // 7. Update .env file
-  const envContent = `VITE_CIRCLE_API_KEY=${API_KEY}
-VITE_CIRCLE_WALLET_ID=${walletId}
+  const envContent = `CIRCLE_API_KEY=${API_KEY}
+CIRCLE_WALLET_ID=${walletId}
 VITE_CIRCLE_TEMPLATE_ID=${templateId}
-VITE_CIRCLE_ENTITY_SECRET=${newEncryptedData.toString('base64')}
+CIRCLE_ENTITY_SECRET=${secret}
 `;
-  fs.writeFileSync('/home/avada/ARC-swap-/.env', envContent);
+  fs.writeFileSync('/home/avada/ARC-swap-/.env.local', envContent, { mode: 0o600 });
   console.log("Successfully updated .env file!");
   fs.writeFileSync('/home/avada/ARC-swap-/circle-recovery.txt', `Entity Secret (KEEP SAFE): ${secret}\n`);
 }

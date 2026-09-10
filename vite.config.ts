@@ -1,16 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: {
-    proxy: {
-      '/circle-api': {
-        target: 'https://api.circle.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/circle-api/, '')
-      }
-    }
-  }
+  // Only public metadata may enter a client bundle, even if old Vercel variables remain.
+  envPrefix: ['PUBLIC_', 'VITE_CIRCLE_DEPLOYED_CONTRACT', 'VITE_CIRCLE_DEPLOY_TX_HASH'],
 })

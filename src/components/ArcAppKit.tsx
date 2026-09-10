@@ -1,51 +1,9 @@
+import { executeArcSwap } from '../lib/arcSwap';
 import React, { useState, useEffect } from 'react';
 import { ArrowUpDown, RefreshCw } from 'lucide-react';
 import { saveTransaction } from '../lib/TransactionHistory';
-import { BrowserProvider, Contract, formatUnits, Interface } from 'ethers';
+import { BrowserProvider, Contract, formatUnits } from 'ethers';
 import { switchOrAddArcNetwork, globalRpcProvider } from '../utils/arcChain';
-
-const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
-const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
-const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a';
-
-const ERC20_INTERFACE = new Interface([
-  "function approve(address spender, uint256 amount) returns (bool)",
-  "function allowance(address owner, address spender) view returns (uint256)",
-  "function balanceOf(address account) view returns (uint256)"
-]);
-
-const WUSDC_INTERFACE = new Interface([
-  "function deposit() payable",
-  "function withdraw(uint256 amount)"
-]);
-
-const ROUTER_INTERFACE = new Interface([
-  {
-    "inputs": [
-      {
-        "components": [
-          { "internalType": "address", "name": "tokenIn", "type": "address" },
-          { "internalType": "address", "name": "tokenOut", "type": "address" },
-          { "internalType": "uint24", "name": "fee", "type": "uint24" },
-          { "internalType": "address", "name": "recipient", "type": "address" },
-          { "internalType": "uint256", "name": "deadline", "type": "uint256" },
-          { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
-          { "internalType": "uint256", "name": "amountOutMinimum", "type": "uint256" },
-          { "internalType": "uint160", "name": "sqrtPriceLimitX96", "type": "uint160" }
-        ],
-        "internalType": "struct ISwapRouter.ExactInputSingleParams",
-        "name": "params",
-        "type": "tuple"
-      }
-    ],
-    "name": "exactInputSingle",
-    "outputs": [
-      { "internalType": "uint256", "name": "amountOut", "type": "uint256" }
-    ],
-    "stateMutability": "payable",
-    "type": "function"
-  }
-]);
 
 const ARC_CHAIN_ID = '0x4CEF52'; // 5042002 in hex
 const ARC_CHAIN_PARAMS = {
@@ -264,176 +222,9 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
       // Check if this is a Swap or a Bridge action
       if (activeTab === 'swap') {
         const finalRecipient = from;
-
-        // --- LIVE WALLET SWAP LOGIC ---
-        const provider = new BrowserProvider(eth);
-        const valueIn = parseFloat(swapAmount);
-        
-        // Balance check
-        const balanceLimit = isReversed ? parseFloat(displayEurc) : parseFloat(displayUsdc);
-        if (valueIn > balanceLimit) {
-          throw new Error(`Insufficient balance. You need at least ${swapAmount} ${tokenInLabel} but have ${balanceLimit} ${tokenInLabel}`);
-        }
-
-        let txHash;
-
-        if (!isReversed) {
-          // USDC (native gas, 18 decimals) -> EURC (ERC20, 6 decimals)
-          // 1. Wrap USDC to WUSDC
-          setStatusMsg('🔌 Step 1/3: Wrapping USDC to WUSDC in your wallet...');
-          const amountWei = BigInt(Math.floor(valueIn * 1e18));
-          
-          const depositData = WUSDC_INTERFACE.encodeFunctionData('deposit', []);
-          txHash = await eth.request({
-            method: 'eth_sendTransaction',
-            params: [{
-              from,
-              to: WUSDC_ADDRESS,
-              value: '0x' + amountWei.toString(16),
-              data: depositData,
-            }],
-          });
-
-          setStatusMsg('⏳ Confirming wrap transaction on Arc scan...');
-          let receipt = null;
-          while (!receipt) {
-            await new Promise(r => setTimeout(r, 2000));
-            receipt = await provider.getTransactionReceipt(txHash);
-          }
-
-          // 2. Check WUSDC Router Allowance
-          setStatusMsg('🔌 Step 2/3: Checking/Approving UnitFlow V3 Router...');
-          const wusdcContract = new Contract(WUSDC_ADDRESS, ["function allowance(address owner, address spender) view returns (uint256)"], provider);
-          const allowance = await wusdcContract.allowance(from, ROUTER_ADDRESS);
-          
-          if (BigInt(allowance) < amountWei) {
-            const approveData = ERC20_INTERFACE.encodeFunctionData('approve', [ROUTER_ADDRESS, BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935')]);
-            const approveTx = await eth.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from,
-                to: WUSDC_ADDRESS,
-                value: '0x0',
-                data: approveData,
-              }],
-            });
-
-            setStatusMsg('⏳ Confirming approve transaction on Arc scan...');
-            let approveReceipt = null;
-            while (!approveReceipt) {
-              await new Promise(r => setTimeout(r, 2000));
-              approveReceipt = await provider.getTransactionReceipt(approveTx);
-            }
-          }
-
-          // 3. Swap WUSDC -> EURC on UnitFlow V3 Router
-          setStatusMsg('🔌 Step 3/3: Executing Swap WUSDC ➔ EURC on UnitFlow V3 Router...');
-          const params = {
-            tokenIn: WUSDC_ADDRESS,
-            tokenOut: EURC_ADDRESS,
-            fee: 100, // 0.01%
-            recipient: finalRecipient,
-            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-            amountIn: amountWei,
-            amountOutMinimum: 0n,
-            sqrtPriceLimitX96: 0n
-          };
-
-          const swapData = ROUTER_INTERFACE.encodeFunctionData('exactInputSingle', [params]);
-          txHash = await eth.request({
-            method: 'eth_sendTransaction',
-            params: [{
-              from,
-              to: ROUTER_ADDRESS,
-              value: '0x0',
-              data: swapData,
-            }],
-          });
-
-          setStatusMsg('✅ Swap transaction submitted on Build on Arc!');
-
-        } else {
-          // EURC (ERC-20, 6 decimals) -> USDC (native gas, 18 decimals)
-          // 1. Approve EURC to Router
-          setStatusMsg('🔌 Step 1/3: Checking/Approving EURC to UnitFlow V3 Router...');
-          const amountWei = BigInt(Math.floor(valueIn * 1e6));
-          const eurcContract = new Contract(EURC_ADDRESS, ["function allowance(address owner, address spender) view returns (uint256)"], provider);
-          const allowance = await eurcContract.allowance(from, ROUTER_ADDRESS);
-
-          if (BigInt(allowance) < amountWei) {
-            const approveData = ERC20_INTERFACE.encodeFunctionData('approve', [ROUTER_ADDRESS, BigInt('115792089237316195423570985008687907853269984665640564039457584007913129639935')]);
-            const approveTx = await eth.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from,
-                to: EURC_ADDRESS,
-                value: '0x0',
-                data: approveData,
-              }],
-            });
-
-            setStatusMsg('⏳ Confirming approve transaction on Arc scan...');
-            let approveReceipt = null;
-            while (!approveReceipt) {
-              await new Promise(r => setTimeout(r, 2000));
-              approveReceipt = await provider.getTransactionReceipt(approveTx);
-            }
-          }
-
-          // 2. Swap EURC -> WUSDC to user address
-          setStatusMsg('🔌 Step 2/3: Executing Swap EURC ➔ WUSDC on UnitFlow V3 Router...');
-          const params = {
-            tokenIn: EURC_ADDRESS,
-            tokenOut: WUSDC_ADDRESS,
-            fee: 100, // 0.01%
-            recipient: from, // must be the user to unwrap WUSDC next
-            deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-            amountIn: amountWei,
-            amountOutMinimum: 0n,
-            sqrtPriceLimitX96: 0n
-          };
-
-          const swapData = ROUTER_INTERFACE.encodeFunctionData('exactInputSingle', [params]);
-          txHash = await eth.request({
-            method: 'eth_sendTransaction',
-            params: [{
-              from,
-              to: ROUTER_ADDRESS,
-              value: '0x0',
-              data: swapData,
-            }],
-          });
-
-          setStatusMsg('⏳ Confirming Swap transaction on Arc scan...');
-          let receipt = null;
-          while (!receipt) {
-            await new Promise(r => setTimeout(r, 2000));
-            receipt = await provider.getTransactionReceipt(txHash);
-          }
-
-          // 3. Unwrap WUSDC to native USDC
-          setStatusMsg('🔌 Step 3/3: Unwrapping WUSDC to native USDC...');
-          const wusdcContract = new Contract(WUSDC_ADDRESS, ["function balanceOf(address account) view returns (uint256)"], provider);
-          const wusdcBalance = await wusdcContract.balanceOf(from);
-          
-          if (BigInt(wusdcBalance) > 0n) {
-            const withdrawData = WUSDC_INTERFACE.encodeFunctionData('withdraw', [wusdcBalance]);
-            const withdrawTx = await eth.request({
-              method: 'eth_sendTransaction',
-              params: [{
-                from,
-                to: WUSDC_ADDRESS,
-                value: '0x0',
-                data: withdrawData,
-              }],
-            });
-
-            setStatusMsg('✅ Unwrap transaction submitted on Build on Arc!');
-            txHash = withdrawTx;
-          } else {
-            setStatusMsg('✅ Swap complete! (No WUSDC balance to unwrap)');
-          }
-        }
+        const swap = await executeArcSwap(eth, swapAmount, isReversed ? 'EURC' : 'USDC', 50, setStatusMsg);
+        const txHash = swap.txHash;
+        setStatusMsg(swap.unwrapWarning || 'Swap confirmed on Arc Testnet.');
 
         const swapResult = {
           status: 'SUCCESS',
@@ -441,7 +232,7 @@ export const ArcAppKit: React.FC<ArcAppKitProps> = ({ connectedAccount, getProvi
           transactionHash: txHash,
           from,
           to: finalRecipient,
-          value: `${swapAmount} ${tokenInLabel} ➔ ${receiveAmount} ${tokenOutLabel}`,
+          value: `${swapAmount} ${tokenInLabel} swapped; see confirmed receipt for output`,
           explorerUrl: `https://testnet.arcscan.app/tx/${txHash}`,
         };
 

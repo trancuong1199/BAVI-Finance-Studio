@@ -1,9 +1,10 @@
+import './load-env.mjs';
 import fs from 'fs';
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 
 // Parse .env manually
 try {
-  const envContent = fs.readFileSync('.env', 'utf8');
+  const envContent = fs.readFileSync('.env.local', 'utf8');
   envContent.split('\n').forEach(line => {
     const parts = line.split('=');
     if (parts.length >= 2) {
@@ -14,8 +15,8 @@ try {
   });
 } catch (e) {}
 
-const API_KEY = process.env.VITE_CIRCLE_API_KEY || 'TEST_API_KEY:9798b8d535ebe61aab310b688bfac5b2:5f169aecff6da1ea654460d180056ac5';
-const ENTITY_SECRET = process.env.VITE_CIRCLE_ENTITY_SECRET || 'c36770ef802cf860ce6f4dd9f187d3f7d43ed7ce5340631eaa4236c884b2fec6';
+const API_KEY = process.env.CIRCLE_API_KEY;
+const ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET;
 
 const client = initiateDeveloperControlledWalletsClient({
     apiKey: API_KEY,

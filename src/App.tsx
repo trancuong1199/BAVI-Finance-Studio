@@ -1,20 +1,22 @@
-import { useState, useEffect, useCallback, startTransition } from 'react';
+import { executeArcSwap } from './lib/arcSwap';
+import { pathForView, viewFromPath, type ViewState } from './lib/navigation';
+import { useState, useEffect, useCallback, startTransition, lazy, Suspense } from 'react';
 import { ethers } from 'ethers';
-import { SwapWidget } from './components/SwapWidget';
-import { ArcAppKit } from './components/ArcAppKit';
-import { Analytics } from './components/Analytics';
-import { Payments } from './components/Payments';
-import { FeaturesDoc } from './components/FeaturesDoc';
+const SwapWidget = lazy(() => import('./components/SwapWidget').then(module => ({ default: module.SwapWidget })));
+const ArcAppKit = lazy(() => import('./components/ArcAppKit').then(module => ({ default: module.ArcAppKit })));
+const Analytics = lazy(() => import('./components/Analytics').then(module => ({ default: module.Analytics })));
+const Payments = lazy(() => import('./components/Payments').then(module => ({ default: module.Payments })));
+const FeaturesDoc = lazy(() => import('./components/FeaturesDoc').then(module => ({ default: module.FeaturesDoc })));
 import { BackgroundAnimation } from './components/BackgroundAnimation';
-import { TransactionMemos } from './components/TransactionMemos';
+const TransactionMemos = lazy(() => import('./components/TransactionMemos').then(module => ({ default: module.TransactionMemos })));
 import { Layers, Repeat, X, Menu, Bot, Send, Settings, LayoutGrid, RefreshCw, BarChart3, FileText, Landmark, ChevronDown, ChevronRight, HelpCircle, Zap, Sun, Moon } from 'lucide-react';
-import { MerchantTreasury } from './components/MerchantTreasury';
+const MerchantTreasury = lazy(() => import('./components/MerchantTreasury').then(module => ({ default: module.MerchantTreasury })));
 import { saveTransaction } from './lib/TransactionHistory';
 import { Dashboard } from './components/Dashboard';
 import { RightSidebar } from './components/RightSidebar';
-import { ArbitrageBot } from './components/ArbitrageBot';
-import { PresentationDeck } from './components/PresentationDeck';
-import { AgentStack } from './components/AgentStack';
+const ArbitrageBot = lazy(() => import('./components/ArbitrageBot').then(module => ({ default: module.ArbitrageBot })));
+const PresentationDeck = lazy(() => import('./components/PresentationDeck').then(module => ({ default: module.PresentationDeck })));
+const AgentStack = lazy(() => import('./components/AgentStack').then(module => ({ default: module.AgentStack })));
 import logoImg from './assets/logo.png';
 import logoDarkImg from './assets/logo-dark.png';
 
@@ -41,7 +43,6 @@ if (typeof window !== 'undefined') {
   };
 }
 
-type ViewState = 'dashboard' | 'swap' | 'uniswap' | 'payments' | 'logs' | 'analytics' | 'faucet' | 'contracts' | 'doc' | 'memos' | 'merchant-treasury' | 'bridge' | 'arbitrage' | 'presentation' | 'agent-stack';
 
 interface EIP6963ProviderInfo {
   uuid: string;
@@ -56,12 +57,7 @@ interface EIP6963ProviderDetail {
 }
 
 function getInitialView(): ViewState {
-  const path = window.location.pathname.replace(/^\//, '');
-  const validViews: ViewState[] = ['dashboard', 'swap', 'uniswap', 'payments', 'logs', 'analytics', 'faucet', 'contracts', 'doc', 'memos', 'merchant-treasury', 'bridge', 'arbitrage', 'presentation'];
-  if (validViews.includes(path as ViewState)) {
-    return path as ViewState;
-  }
-  return 'dashboard';
+  return viewFromPath(window.location.pathname);
 }
 
 function App() {
@@ -165,83 +161,12 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
     return await ethersProvider.getSigner();
   };
 
-  // 1. Swap USDC -> EURC or EURC -> USDC
   const chatbotSwap = async (amount: string, fromToken: 'USDC' | 'EURC') => {
-    const signer = await getEthersSigner();
-    const from = await signer.getAddress();
-    const valueIn = parseFloat(amount);
-
-    const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
-    const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
-    const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a';
-
-    const erc20Abi = [
-      "function approve(address spender, uint256 amount) returns (bool)",
-      "function allowance(address owner, address spender) view returns (uint256)",
-      "function balanceOf(address account) view returns (uint256)"
-    ];
-    const wusdcAbi = [
-      "function deposit() payable",
-      "function withdraw(uint256 amount)"
-    ];
-    const routerAbi = [
-      "function exactInputSingle(tuple(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) params) external payable returns (uint256 amountOut)"
-    ];
-
-    let txHash;
-    if (fromToken === 'USDC') {
-      const amountWei = BigInt(Math.floor(valueIn * 1e18));
-      const wusdc = new ethers.Contract(WUSDC_ADDRESS, wusdcAbi, signer);
-      const wrapTx = await wusdc.deposit({ value: amountWei });
-      await wrapTx.wait();
-
-      const wusdcErc20 = new ethers.Contract(WUSDC_ADDRESS, erc20Abi, signer);
-      const approveTx = await wusdcErc20.approve(ROUTER_ADDRESS, amountWei);
-      await approveTx.wait();
-
-      const router = new ethers.Contract(ROUTER_ADDRESS, routerAbi, signer);
-      const params = {
-        tokenIn: WUSDC_ADDRESS,
-        tokenOut: EURC_ADDRESS,
-        fee: 100,
-        recipient: from,
-        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-        amountIn: amountWei,
-        amountOutMinimum: 0n,
-        sqrtPriceLimitX96: 0n
-      };
-      const swapTx = await router.exactInputSingle(params);
-      const receipt = await swapTx.wait();
-      txHash = receipt.hash;
-    } else {
-      const amountWei = BigInt(Math.floor(valueIn * 1e6));
-      const eurc = new ethers.Contract(EURC_ADDRESS, erc20Abi, signer);
-      const approveTx = await eurc.approve(ROUTER_ADDRESS, amountWei);
-      await approveTx.wait();
-
-      const router = new ethers.Contract(ROUTER_ADDRESS, routerAbi, signer);
-      const params = {
-        tokenIn: EURC_ADDRESS,
-        tokenOut: WUSDC_ADDRESS,
-        fee: 100,
-        recipient: from,
-        deadline: BigInt(Math.floor(Date.now() / 1000) + 1200),
-        amountIn: amountWei,
-        amountOutMinimum: 0n,
-        sqrtPriceLimitX96: 0n
-      };
-      const swapTx = await router.exactInputSingle(params);
-      await swapTx.wait();
-
-      const wusdcContract = new ethers.Contract(WUSDC_ADDRESS, [...wusdcAbi, ...erc20Abi], signer);
-      const wusdcBalance = await wusdcContract.balanceOf(from);
-      if (wusdcBalance > 0n) {
-        const withdrawTx = await wusdcContract.withdraw(wusdcBalance);
-        const receipt = await withdrawTx.wait();
-        txHash = receipt.hash;
-      }
-    }
-    return txHash;
+    const wallet = getProvider();
+    if (!wallet) throw new Error('Connect your wallet first.');
+    const result = await executeArcSwap(wallet, amount, fromToken);
+    if (result.unwrapWarning) setChatMessages(prev => [...prev, { sender: 'agent', text: result.unwrapWarning!, time: new Date().toLocaleTimeString() }]);
+    return result.txHash;
   };
 
   // 2. Deposit to Vault
@@ -676,7 +601,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
       setCurrentView(view);
       setIsMobileMenuOpen(false);
     });
-    window.history.pushState({}, '', `/${view === 'swap' ? '' : view}`);
+    window.history.pushState({}, '', pathForView(view));
   };
   const [activeWidget, setActiveWidget] = useState<'lifi' | 'native'>('native');
   const [address, setAddress] = useState<string | null>(null);
@@ -811,6 +736,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
   };
 
   return (
+    <Suspense fallback={<div role="status" style={{ padding: 24 }}>Loading page…</div>}>
     <>
       <BackgroundAnimation />
       <div className="mobile-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-color)', padding: '10px 15px', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1586,6 +1512,7 @@ Do not include any markdown formatting like \`\`\`json. Return pure JSON string.
         )}
       </div>
     </>
+    </Suspense>
   );
 }
 

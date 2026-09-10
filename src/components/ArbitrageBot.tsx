@@ -9,11 +9,9 @@ import {
   DollarSign, 
   Globe, 
   CheckCircle2,
-  ExternalLink,
   ShieldCheck,
   Radio
 } from 'lucide-react';
-import { ethers } from 'ethers';
 import { globalRpcProvider } from '../utils/arcChain';
 import { PriceMonitor, type ArbitrageOpportunity, type RealChainStatus } from '../lib/priceMonitor';
 
@@ -22,11 +20,7 @@ interface ArbitrageBotProps {
   getProvider?: () => any;
 }
 
-const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
-const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
-const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a';
-
-export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, getProvider }) => {
+export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [autoExecute, setAutoExecute] = useState(false);
   const [minProfit, setMinProfit] = useState(0.5); // Minimum profit in USDC
@@ -36,56 +30,23 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
   // Real RPC Stats
   const [chainStatus, setChainStatus] = useState<RealChainStatus | null>(null);
   const [totalScanned, setTotalScanned] = useState(0);
-  const [totalExecuted, setTotalExecuted] = useState(0);
-  const [totalProfitUSDC, setTotalProfitUSDC] = useState(0);
-  const [gasCostTotal, setGasCostTotal] = useState(0);
+  const [totalExecuted] = useState(0);
+  const [totalProfitUSDC] = useState(0);
+  const [gasCostTotal] = useState(0);
 
   // Live opportunities state
-  const [opportunities, setOpportunities] = useState<ArbitrageOpportunity[]>([
-    {
-      id: 'opp-initial-1',
-      pair: 'USDC / EURC',
-      dexA: 'UnitFlow V3 (Arc)',
-      dexB: 'ArcSwap V2',
-      priceA: 1.082,
-      priceB: 1.096,
-      spread: 1.29,
-      expectedProfit: 2.14,
-      optimalAmountIn: 180,
-      timestamp: new Date().toLocaleTimeString(),
-      status: 'active',
-      buyPool: '0x1111111111111111111111111111111111111111',
-      sellPool: '0x2222222222222222222222222222222222222222',
-      isRealOnChain: true
-    },
-    {
-      id: 'opp-initial-2',
-      pair: 'USDC / cirBTC',
-      dexA: 'ArcSwap V2',
-      dexB: 'UnitFlow V3 (Arc)',
-      priceA: 64250.0,
-      priceB: 64780.0,
-      spread: 0.82,
-      expectedProfit: 4.25,
-      optimalAmountIn: 500,
-      timestamp: new Date().toLocaleTimeString(),
-      status: 'active',
-      buyPool: '0x3333333333333333333333333333333333333333',
-      sellPool: '0x4444444444444444444444444444444444444444',
-      isRealOnChain: true
-    }
-  ]);
+  const [opportunities, setOpportunities] = useState<ArbitrageOpportunity[]>([]);
 
   // Logs stream
   const [logs, setLogs] = useState<Array<{ id: string; text: string; type: 'info' | 'success' | 'warn' | 'cctp'; time: string }>>([
-    { id: '1', text: '🤖 Connected to Arc Network RPC (https://rpc.testnet.arc.network - Chain ID: 5042002)', type: 'info', time: new Date().toLocaleTimeString() },
-    { id: '2', text: '⚡ Sub-second Block Finality active (<1s). Fixed Gas: $0.002 USDC', type: 'info', time: new Date().toLocaleTimeString() },
+    { id: '1', text: 'Connecting to Arc Testnet RPC…', type: 'info', time: new Date().toLocaleTimeString() },
+    { id: '2', text: 'Arbitrage execution is unavailable until an atomic route is configured.', type: 'info', time: new Date().toLocaleTimeString() },
     { id: '3', text: '📡 Initializing PriceMonitor engine with Arc Testnet RPC provider...', type: 'info', time: new Date().toLocaleTimeString() }
   ]);
 
   // CCTP State
   const [cctpStatus, setCctpStatus] = useState<'idle' | 'burning' | 'attesting' | 'minting' | 'complete'>('idle');
-  const [cctpTxHash, setCctpTxHash] = useState<string>('');
+  const [cctpSimulationComplete, setCctpSimulationComplete] = useState(false);
 
   // 1. Initial RPC Handshake & Block fetch
   useEffect(() => {
@@ -124,9 +85,15 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
         setChainStatus(status);
         setTotalScanned(prev => prev + 1);
 
-        // Read pool reserves on Arc Testnet
-        const poolA = await monitor.getPoolReserves('0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01', 'UnitFlow V3 (Arc)');
-        const poolB = await monitor.getPoolReserves('0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a', 'ArcSwap V2');
+        const poolAddressA = import.meta.env.PUBLIC_ARBITRAGE_POOL_A;
+        const poolAddressB = import.meta.env.PUBLIC_ARBITRAGE_POOL_B;
+        if (!poolAddressA || !poolAddressB) {
+          setOpportunities([]);
+          return;
+        }
+        // Only configured V2-compatible pairs can be read with getReserves().
+        const poolA = await monitor.getPoolReserves(poolAddressA, 'Pool A');
+        const poolB = await monitor.getPoolReserves(poolAddressB, 'Pool B');
 
         // Calculate real arbitrage opportunity
         const opp = PriceMonitor.calculateArbitrageOpportunity(poolA, poolB, 'USDC / EURC');
@@ -145,7 +112,7 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
         setLogs(prev => [
           {
             id: `rpc-${Date.now()}`,
-            text: `🔍 [RPC Block #${status.blockNumber}] Sync (${status.latencyMs}ms). Scanned Pools: UnitFlow V3 vs ArcSwap V2. Spread: ${opp ? opp.spread : 0.85}%`,
+            text: `🔍 [RPC Block #${status.blockNumber}] Sync (${status.latencyMs}ms). Scanned Pools: UnitFlow V3 vs ArcSwap V2. Spread: ${opp ? `${opp.spread}%` : 'unavailable'}`,
             type: 'info',
             time: status.timestamp
           },
@@ -165,99 +132,20 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
     return () => clearInterval(interval);
   }, [isRunning]);
 
-  // 3. Execute Arbitrage Trade On-Chain
-  const handleExecuteArbitrage = async (opp: ArbitrageOpportunity) => {
-    setOpportunities(prev => prev.map(o => o.id === opp.id ? { ...o, status: 'executing' } : o));
-
-    const timeStr = new Date().toLocaleTimeString();
-    setLogs(prev => [
-      { id: Date.now().toString(), text: `🚀 Initiating On-Chain Arbitrage Execution: Buy ${opp.dexA} ➔ Sell ${opp.dexB} (${opp.optimalAmountIn} USDC)...`, type: 'warn', time: timeStr },
-      ...prev
-    ]);
-
-    try {
-      let txHash = '';
-      const walletProvider = getProvider ? getProvider() : (window as any).ethereum;
-
-      if (walletProvider && connectedAccount) {
-        // Real Web3 Provider execution
-        const ethersProvider = new ethers.BrowserProvider(walletProvider);
-        const signer = await ethersProvider.getSigner();
-
-        setLogs(prev => [
-          { id: `tx-sign-${Date.now()}`, text: `🔐 Prompting wallet signature for Router (${ROUTER_ADDRESS})...`, type: 'info', time: new Date().toLocaleTimeString() },
-          ...prev
-        ]);
-
-        // ERC20 Approve / ExactInput params simulation or call router
-        const routerAbi = [
-          'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)'
-        ];
-
-        const routerContract = new ethers.Contract(ROUTER_ADDRESS, routerAbi, signer);
-
-        // Submit transaction to Arc Testnet
-        const amountInWei = ethers.parseUnits(opp.optimalAmountIn.toString(), 6); // USDC decimals = 6
-        const deadline = Math.floor(Date.now() / 1000) + 600;
-
-        try {
-          const tx = await routerContract.exactInputSingle({
-            tokenIn: WUSDC_ADDRESS,
-            tokenOut: EURC_ADDRESS,
-            fee: 3000,
-            recipient: connectedAccount,
-            deadline: deadline,
-            amountIn: amountInWei,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-          }, { gasLimit: 250000 });
-
-          txHash = tx.hash;
-          setLogs(prev => [
-            { id: `tx-sent-${Date.now()}`, text: `⏳ Transaction broadcasted to Arc Testnet! Hash: ${txHash}`, type: 'info', time: new Date().toLocaleTimeString() },
-            ...prev
-          ]);
-          await tx.wait();
-        } catch (contractErr: any) {
-          // If contract call reverts due to testnet router state, generate valid testnet tx record with real signer address
-          txHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-        }
-      } else {
-        // Real RPC simulation delay if wallet is disconnected
-        await new Promise(r => setTimeout(r, 1800));
-        txHash = `0x7f${Array.from({ length: 62 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-      }
-
-      setTotalExecuted(prev => prev + 1);
-      setTotalProfitUSDC(prev => Number((prev + opp.expectedProfit).toFixed(2)));
-      setGasCostTotal(prev => Number((prev + 0.002).toFixed(4)));
-
-      setOpportunities(prev => prev.map(o => o.id === opp.id ? { ...o, status: 'completed' } : o));
-
-      setLogs(prev => [
-        { 
-          id: (Date.now() + 1).toString(), 
-          text: `🎉 Arbitrage Trade Confirmed on Arc Testnet! Net Profit: +$${opp.expectedProfit} USDC (Gas Fee: $0.002 USDC). Tx: ${txHash.slice(0, 10)}...${txHash.slice(-6)}`, 
-          type: 'success', 
-          time: new Date().toLocaleTimeString() 
-        },
-        ...prev
-      ]);
-    } catch (err: any) {
-      console.error('Trade Execution Error:', err);
-      setOpportunities(prev => prev.map(o => o.id === opp.id ? { ...o, status: 'active' } : o));
-      setLogs(prev => [
-        { id: `err-${Date.now()}`, text: `❌ Trade Execution Failed: ${err.message || 'User rejected transaction'}`, type: 'warn', time: new Date().toLocaleTimeString() },
-        ...prev
-      ]);
-    }
+  const handleExecuteArbitrage = (opp: ArbitrageOpportunity) => {
+    setLogs(prev => [{
+      id: crypto.randomUUID(),
+      text: `Execution unavailable for ${opp.pair}: a verified atomic two-pool route is required. No transaction was sent.`,
+      type: 'warn', time: new Date().toLocaleTimeString(),
+    }, ...prev]);
   };
 
   const handleSimulateCCTP = () => {
     setCctpStatus('burning');
+    setCctpSimulationComplete(false);
     const t0 = new Date().toLocaleTimeString();
     setLogs(prev => [
-      { id: Date.now().toString(), text: '🌐 [Circle CCTP] Executing depositForBurn(100 USDC) on Ethereum Sepolia...', type: 'cctp', time: t0 },
+      { id: Date.now().toString(), text: '[SIMULATION] 🌐 [Circle CCTP] Executing depositForBurn(100 USDC) on Ethereum Sepolia...', type: 'cctp', time: t0 },
       ...prev
     ]);
 
@@ -265,7 +153,7 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
       setCctpStatus('attesting');
       const t1 = new Date().toLocaleTimeString();
       setLogs(prev => [
-        { id: Date.now().toString(), text: '⏳ [Circle Iris API] Polling Circle Attestation API for Message Hash signature...', type: 'cctp', time: t1 },
+        { id: Date.now().toString(), text: '[SIMULATION] ⏳ [Circle Iris API] Polling Circle Attestation API for Message Hash signature...', type: 'cctp', time: t1 },
         ...prev
       ]);
 
@@ -273,17 +161,16 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
         setCctpStatus('minting');
         const t2 = new Date().toLocaleTimeString();
         setLogs(prev => [
-          { id: Date.now().toString(), text: '✍️ [Circle Attestation Signed] Submitting receiveMessage() to Arc Network...', type: 'cctp', time: t2 },
+          { id: Date.now().toString(), text: '[SIMULATION] ✍️ [Circle Attestation Signed] Submitting receiveMessage() to Arc Network...', type: 'cctp', time: t2 },
           ...prev
         ]);
 
         setTimeout(() => {
           setCctpStatus('complete');
-          const realTx = `0x4f8b92c1a${Array.from({ length: 54 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-          setCctpTxHash(realTx);
+          setCctpSimulationComplete(true);
           const t3 = new Date().toLocaleTimeString();
           setLogs(prev => [
-            { id: Date.now().toString(), text: '✅ [CCTP Mint Complete] 100 USDC Native minted on Arc Network with zero slippage!', type: 'success', time: t3 },
+            { id: Date.now().toString(), text: '[SIMULATION] ✅ [CCTP Mint Complete] 100 USDC Native minted on Arc Network with zero slippage!', type: 'success', time: t3 },
             ...prev
           ]);
         }, 2000);
@@ -293,6 +180,7 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+      <p role="status">Arbitrage monitoring only. Live execution requires a verified atomic two-pool route; no trades or profits are recorded here. Configure compatible pool addresses to scan.</p>
       {/* Header Banner */}
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f766e 100%)',
@@ -462,7 +350,7 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
                     Spread: +{opp.spread}%
                   </span>
                   <span style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6', padding: '2px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <ShieldCheck size={12} /> Live RPC Verified
+                    <ShieldCheck size={12} /> Pool data observed
                   </span>
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -557,15 +445,8 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              {cctpTxHash ? (
-                <a 
-                  href={`https://testnet.arcscan.app/tx/${cctpTxHash}`} 
-                  target="_blank" 
-                  rel="noreferrer"
-                  style={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
-                >
-                  <CheckCircle2 size={18} /> CCTP Transfer Confirmed! Tx: {cctpTxHash.slice(0, 16)}... <ExternalLink size={14} />
-                </a>
+              {cctpSimulationComplete ? (
+                <span>Simulation complete. No tokens moved and no transaction was submitted.</span>
               ) : (
                 <span>Simulate bridging 100 USDC from Arbitrum Sepolia to Arc Testnet via Circle Iris API</span>
               )}
@@ -649,10 +530,11 @@ export const ArbitrageBot: React.FC<ArbitrageBotProps> = ({ connectedAccount, ge
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', background: 'var(--bg-tertiary)', borderRadius: '12px' }}>
             <div>
               <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>Auto-Execute Trades</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Automatically submit transaction when expected profit exceeds threshold</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Unavailable: a verified atomic two-pool route is required.</span>
             </div>
             <input
               type="checkbox"
+              disabled
               checked={autoExecute}
               onChange={e => setAutoExecute(e.target.checked)}
               style={{ width: '20px', height: '20px', cursor: 'pointer' }}

@@ -1,8 +1,9 @@
+import './load-env.mjs';
 import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets';
 import crypto from 'crypto';
 import fs from 'fs';
 
-const API_KEY = 'TEST_API_KEY:ca21ddf43344f814a3b699f8205a961e:5b9d8a9098e9b24de94162eaa7c39fac';
+const API_KEY = process.env.CIRCLE_API_KEY;
 
 async function main() {
   console.log("Starting Circle SDK setup...");
@@ -61,12 +62,12 @@ async function main() {
        console.log("Warning: Could not fetch public key for frontend ciphertext generation", pubKeyData);
     }
     
-    const envContent = `VITE_CIRCLE_API_KEY=${API_KEY}
-VITE_CIRCLE_WALLET_ID=${walletId}
+    const envContent = `CIRCLE_API_KEY=${API_KEY}
+CIRCLE_WALLET_ID=${walletId}
 VITE_CIRCLE_TEMPLATE_ID=
-VITE_CIRCLE_ENTITY_SECRET=${entitySecretCiphertext}
+CIRCLE_ENTITY_SECRET=${entitySecret}
 `;
-    fs.writeFileSync('/home/avada/ARC-swap-/.env', envContent);
+    fs.writeFileSync('/home/avada/ARC-swap-/.env.local', envContent, { mode: 0o600 });
     fs.writeFileSync('/home/avada/ARC-swap-/circle-recovery.txt', `Entity Secret: ${entitySecret}\n`);
     console.log("Successfully wrote to .env and circle-recovery.txt");
     

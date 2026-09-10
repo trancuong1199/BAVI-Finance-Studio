@@ -32,6 +32,8 @@ async function main() {
       }
     },
     settings: {
+      evmVersion: 'paris',
+      optimizer: { enabled: true, runs: 200 },
       outputSelection: {
         '*': {
           '*': ['abi', 'evm.bytecode.object']

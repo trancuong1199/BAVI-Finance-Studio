@@ -1,3 +1,4 @@
+import './load-env.mjs';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -8,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // Parse .env manually
 try {
-  const envContent = fs.readFileSync('.env', 'utf8');
+  const envContent = fs.readFileSync('.env.local', 'utf8');
   envContent.split('\n').forEach(line => {
     const parts = line.split('=');
     if (parts.length >= 2) {
@@ -21,13 +22,13 @@ try {
   console.log("No .env file found");
 }
 
-const API_KEY = process.env.VITE_CIRCLE_API_KEY;
-const WALLET_ID = process.env.VITE_CIRCLE_WALLET_ID;
-const PLAINTEXT_ENTITY_SECRET = process.env.VITE_CIRCLE_ENTITY_SECRET;
+const API_KEY = process.env.CIRCLE_API_KEY;
+const WALLET_ID = process.env.CIRCLE_WALLET_ID;
+const PLAINTEXT_ENTITY_SECRET = process.env.CIRCLE_ENTITY_SECRET;
 const DEVELOPER_WALLET_ADDRESS = '0x4a86c0b160decf8db472f5ad2078fc0ca5e9e69e';
 
 if (!API_KEY || !WALLET_ID || !PLAINTEXT_ENTITY_SECRET) {
-  console.error("VITE_CIRCLE_API_KEY, VITE_CIRCLE_WALLET_ID, or VITE_CIRCLE_ENTITY_SECRET not set in .env");
+  console.error("CIRCLE_API_KEY, CIRCLE_WALLET_ID, or CIRCLE_ENTITY_SECRET not set in .env.local");
   process.exit(1);
 }
 
@@ -180,7 +181,7 @@ async function main() {
   // Update .env for USDC if deployed
   if (deployed.USDC) {
     console.log("\nUpdating .env file with new VITE_CIRCLE_DEPLOYED_CONTRACT...");
-    let envContent = fs.readFileSync('.env', 'utf8');
+    let envContent = fs.readFileSync('.env.local', 'utf8');
     
     // Replace VITE_CIRCLE_DEPLOYED_CONTRACT
     if (envContent.includes('VITE_CIRCLE_DEPLOYED_CONTRACT=')) {
@@ -196,7 +197,7 @@ async function main() {
       envContent += `\nVITE_CIRCLE_DEPLOY_TX_HASH=${deployed.USDC.txHash}`;
     }
 
-    fs.writeFileSync('.env', envContent, 'utf8');
+    fs.writeFileSync('.env.local', envContent, 'utf8');
     console.log("Successfully updated .env file!");
   }
 }

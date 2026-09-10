@@ -7,12 +7,6 @@ const PAIR_ABI = [
   'event Sync(uint112 reserve0, uint112 reserve1)'
 ];
 
-const ERC20_ABI = [
-  'function balanceOf(address owner) external view returns (uint256)',
-  'function totalSupply() external view returns (uint256)',
-  'function decimals() external view returns (uint8)'
-];
-
 export interface PoolReserves {
   poolName: string;
   poolAddress: string;
@@ -76,41 +70,7 @@ export class PriceMonitor {
         price,
       };
     } catch (err) {
-      // Fallback: If contract reserve read fails, fallback to RPC token balance queries on Arc Router
-      const ROUTER_ADDRESS = '0x509cF58CdA08C7aee83a2BdBb4A1Eac907343D01';
-      const EURC_ADDRESS = '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a';
-      const WUSDC_ADDRESS = '0x911b4000D3422F482F4062a913885f7b035382Df';
-
-      const eurcContract = new ethers.Contract(EURC_ADDRESS, ERC20_ABI, this.provider);
-      const wusdcContract = new ethers.Contract(WUSDC_ADDRESS, ERC20_ABI, this.provider);
-
-      let r0 = BigInt(100000000000); // 100k USDC
-      let r1 = BigInt(92000000000);  // 92k EURC
-
-      try {
-        const routerEurcBal = await eurcContract.balanceOf(ROUTER_ADDRESS);
-        const routerWusdcBal = await wusdcContract.balanceOf(ROUTER_ADDRESS);
-        if (routerEurcBal > 0n && routerWusdcBal > 0n) {
-          r0 = routerWusdcBal;
-          r1 = routerEurcBal;
-        }
-      } catch (e) {
-        // ignore
-      }
-
-      const r0Float = Number(r0) / 1e6;
-      const r1Float = Number(r1) / 1e6;
-      const price = r0Float > 0 ? r1Float / r0Float : 1.082;
-
-      return {
-        poolName,
-        poolAddress,
-        reserve0: r0,
-        reserve1: r1,
-        token0: WUSDC_ADDRESS,
-        token1: EURC_ADDRESS,
-        price,
-      };
+      throw new Error(`Cannot read reserves for ${poolName}; no estimate is substituted.`, { cause: err });
     }
   }
 
@@ -135,8 +95,12 @@ export class PriceMonitor {
     poolA: PoolReserves,
     poolB: PoolReserves,
     pairName: string = 'USDC / EURC',
-    _feeBps: number = 30
+    feeBps: number = 30
   ): ArbitrageOpportunity | null {
+    if (poolA.poolAddress.toLowerCase() === poolB.poolAddress.toLowerCase() ||
+        poolA.token0.toLowerCase() !== poolB.token0.toLowerCase() ||
+        poolA.token1.toLowerCase() !== poolB.token1.toLowerCase() ||
+        poolA.price <= 0 || poolB.price <= 0) return null;
     const priceA = poolA.price;
     const priceB = poolB.price;
 
@@ -152,8 +116,9 @@ export class PriceMonitor {
 
     const spread = Number(Math.abs(priceDiff).toFixed(2));
 
+    if (spread <= feeBps * 2 / 100) return null;
     const optimalAmountIn = 150 + Math.floor(spread * 50);
-    const expectedProfit = Number(((optimalAmountIn * Math.max(0.2, spread)) / 100 * 0.9).toFixed(2));
+    const expectedProfit = Number(((optimalAmountIn * (spread - feeBps * 2 / 100)) / 100 * 0.9).toFixed(2));
 
     return {
       id: `opp-${Date.now()}`,
